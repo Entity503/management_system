@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block title %}活动 - 计算机俱乐部{% endblock %}
+{% block content %}
+<section class="content-page">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div>
+            <p class="eyebrow">ACTIVITIES</p>
+            <h1>社团活动</h1>
+        </div>
+        {% if is_admin %}
+        <a href="{% url 'club:activity-create' %}" class="btn btn-primary">+ 发布活动</a>
+        {% endif %}
+    </div>
+
+    {% if upcoming %}
+    <h3 style="margin-top:16px;margin-bottom:10px;color:var(--coral);font-size:1rem;">即将开始</h3>
+    <div class="card-grid">
+        {% for a in upcoming %}
+        <a class="card" href="{% url 'club:activity-detail' a.pk %}">
+            {% if a.cover %}
+            <img src="{{ a.cover.url }}" alt="" style="width:100%;height:120px;object-fit:cover;border-radius:12px;margin-bottom:8px;">
+            {% endif %}
+            <div style="font-size:.92rem;font-weight:600;">{{ a.title }}</div>
+            <div style="color:var(--muted);font-size:.76rem;margin-top:4px;">
+                🕐 {{ a.start_time|date:'m月d日 H:i' }}
+            </div>
+            <div style="color:var(--muted);font-size:.76rem;">
+                📍 {{ a.location|default:'线上' }}
+            </div>
+            <div style="margin-top:6px;font-size:.72rem;">
+                <span class="badge badge-coral">{{ a.get_status_display }}</span>
+                <span class="badge" style="margin-left:6px;">{{ a.signup_count }}/{{ a.capacity }}</span>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if past %}
+    <h3 style="margin-top:24px;margin-bottom:10px;color:var(--text-secondary);font-size:1rem;">已结束</h3>
+    <div class="card-grid">
+        {% for a in past %}
+        <a class="card" href="{% url 'club:activity-detail' a.pk %}" style="opacity:0.8;">
+            {% if a.cover %}
+            <img src="{{ a.cover.url }}" alt="" style="width:100%;height:100px;object-fit:cover;border-radius:12px;margin-bottom:8px;filter:grayscale(0.5);">
+            {% endif %}
+            <div style="font-size:.92rem;font-weight:600;">{{ a.title }}</div>
+            <div style="color:var(--muted);font-size:.76rem;margin-top:4px;">
+                🕐 {{ a.start_time|date:'m月d日' }}
+            </div>
+            <div style="margin-top:6px;font-size:.72rem;">
+                <span class="badge">{{ a.get_status_display }}</span>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if not upcoming and not past %}
+    <div class="empty-state">
+        <p>暂无活动，敬请期待～</p>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{{ problem.title }} - 刷题{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'highlight/github-dark.min.css' %}">
+<style>
+.problem-detail .problem-meta { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; color: var(--muted); }
+.problem-detail .difficulty-easy { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; padding: 2px 12px; border-radius: 999px; font-size: 12px; border: 1px solid rgba(16, 185, 129, 0.3); }
+.problem-detail .difficulty-medium { background: rgba(251, 191, 36, 0.15); color: #fcd34d; padding: 2px 12px; border-radius: 999px; font-size: 12px; border: 1px solid rgba(251, 191, 36, 0.3); }
+.problem-detail .difficulty-hard { background: rgba(239, 68, 68, 0.15); color: #fca5a5; padding: 2px 12px; border-radius: 999px; font-size: 12px; border: 1px solid rgba(239, 68, 68, 0.3); }
+.problem-detail .quiz-form { margin-top: 24px; }
+.problem-detail .letter-group { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.problem-detail .letter-group label {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 8px;
+    cursor: pointer; font-weight: 600; font-size: 16px; transition: all .15s;
+    background: rgba(255, 255, 255, 0.03); color: var(--ink);
+}
+.problem-detail .letter-group label:hover { border-color: var(--coral); background: rgba(255, 122, 200, 0.08); }
+.problem-detail .letter-group input { display: none; }
+.problem-detail .letter-group input:checked + span {
+    background: linear-gradient(135deg, var(--coral), #ff765f); color: white; border: 1px solid var(--coral);
+    border-radius: 8px; display: inline-flex; align-items: center; justify-content: center;
+    width: 42px; height: 42px;
+}
+.problem-detail .fill-input { width: 100%; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; font-size: 15px; font-family: inherit; background: rgba(255, 255, 255, 0.05); color: var(--ink); }
+.problem-detail .fill-input::placeholder { color: rgba(154, 160, 192, 0.5); }
+.problem-detail .fill-input:focus { outline: none; border-color: var(--coral); background: rgba(255, 122, 200, 0.06); }
+.problem-detail .result-box { margin-top: 20px; padding: 16px 20px; border-radius: 12px; border-left: 4px solid; color: var(--ink); }
+.problem-detail .result-correct { background: rgba(16, 185, 129, 0.12); border-color: #10b981; }
+.problem-detail .result-correct strong { color: #6ee7b7; }
+.problem-detail .result-correct code { background: rgba(16, 185, 129, 0.2); color: #a7f3d0; padding: 1px 6px; border-radius: 4px; }
+.problem-detail .result-wrong { background: rgba(239, 68, 68, 0.12); border-color: #ef4444; }
+.problem-detail .result-wrong strong { color: #fca5a5; }
+.problem-detail .result-wrong code { background: rgba(239, 68, 68, 0.2); color: #fecaca; padding: 1px 6px; border-radius: 4px; }
+.problem-detail .explanation-box { margin-top: 16px; padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: rgba(22, 25, 50, 0.55); backdrop-filter: blur(10px); }
+.problem-detail .explanation-box h3 { color: var(--ink); margin-top: 0; }
+.problem-detail .prose { color: var(--ink); }
+.problem-detail .prose h1, .problem-detail .prose h2, .problem-detail .prose h3 { margin-top: 1em; color: var(--ink); }
+.problem-detail .prose p { margin: .5em 0; color: var(--ink); }
+.problem-detail .prose ul, .problem-detail .prose ol { margin-left: 1.5em; color: var(--ink); }
+.problem-detail .prose pre { border-radius: 8px; padding: 12px; overflow-x: auto; background: rgba(5, 6, 15, 0.85); border: 1px solid var(--line); }
+.problem-detail .prose code { background: rgba(255, 255, 255, 0.08); color: #fbbf24; border-radius: 3px; padding: 2px 6px; font-size: 0.9em; }
+.problem-detail .prose pre code { background: transparent; padding: 0; color: #a5f3fc; }
+.problem-detail .prose blockquote { border-left: 3px solid var(--coral); background: rgba(255, 122, 200, 0.06); color: var(--muted); padding: 4px 12px; margin: 8px 0; border-radius: 0 8px 8px 0; }
+.problem-detail .prose a { color: var(--coral); }
+.problem-detail .prose table { border-collapse: collapse; margin: 10px 0; }
+.problem-detail .prose table td, .problem-detail .prose table th { border: 1px solid var(--line); padding: 6px 10px; color: var(--ink); }
+.problem-detail .prose table th { background: rgba(107, 140, 255, 0.15); }
+</style>
+{% endblock %}
+{% block content %}
+<section class="content-page problem-detail">
+    <p class="eyebrow">PRACTICE LAB</p>
+    <h1>{{ problem.title }}</h1>
+    <div class="problem-meta">
+        <span class="difficulty difficulty-{{ problem.difficulty }}">{{ problem.get_difficulty_display }}</span>
+        <small>{{ problem.get_problem_type_display }}</small>
+        <small>·</small>
+        <small>{{ problem.category.name }}</small>
+        <small>·</small>
+        <small>by {{ problem.created_by.profile.nickname|default:problem.created_by.username }}</small>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-bottom:16px;">
+        <a href="{% url 'club:practice' %}" style="color:var(--coral);font-size:14px;">← 返回刷题列表</a>
+        {% if user.is_authenticated and user.is_staff or user.is_authenticated and user == problem.created_by %}
+        <span style="color:var(--muted);">|</span>
+        <a href="{% url 'club:problem-edit' problem.pk %}" style="color:var(--coral);font-size:14px;">编辑题目</a>
+        <a href="{% url 'club:problem-delete' problem.pk %}" style="color:#e74c3c;font-size:14px;">删除题目</a>
+        {% endif %}
+    </div>
+
+    <div class="prose">{{ content_html|safe }}</div>
+
+    <form method="post" class="quiz-form">
+        {% csrf_token %}
+        {% if problem.problem_type == 'single' %}
+            <p style="color:var(--muted);font-size:13px;margin-bottom:4px;">请选择正确答案：</p>
+            <div class="letter-group">
+                {% for letter in 'ABCDEFGH' %}
+                <label>
+                    <input type="radio" name="choice" value="{{ letter }}" {% if user_answer == letter %}checked{% endif %}>
+                    <span>{{ letter }}</span>
+                </label>
+                {% endfor %}
+            </div>
+        {% elif problem.problem_type == 'multiple' %}
+            <p style="color:var(--muted);font-size:13px;margin-bottom:4px;">请勾选所有正确答案：</p>
+            <div class="letter-group">
+                {% for letter in 'ABCDEFGH' %}
+                <label>
+                    <input type="checkbox" name="choice" value="{{ letter }}" {% if letter in user_answer|default:'' %}checked{% endif %}>
+                    <span>{{ letter }}</span>
+                </label>
+                {% endfor %}
+            </div>
+        {% elif problem.problem_type == 'judge' %}
+            <p style="color:var(--muted);font-size:13px;margin-bottom:4px;">请判断对错：</p>
+            <div class="letter-group">
+                <label>
+                    <input type="radio" name="choice" value="T" {% if user_answer == 'T' %}checked{% endif %}>
+                    <span>✓ T</span>
+                </label>
+                <label>
+                    <input type="radio" name="choice" value="F" {% if user_answer == 'F' %}checked{% endif %}>
+                    <span>✗ F</span>
+                </label>
+            </div>
+        {% elif problem.problem_type == 'fill' %}
+            <input type="text" name="fill_answer" class="fill-input" placeholder="请输入你的答案..." value="{{ user_answer|default:'' }}">
+        {% elif problem.problem_type == 'short_answer' %}
+            <textarea name="open_answer" class="fill-input" rows="5" placeholder="请输入你的简答...">{{ user_answer|default:'' }}</textarea>
+        {% elif problem.problem_type == 'comprehensive' %}
+            <textarea name="open_answer" class="fill-input" rows="8" placeholder="请输入你的综合分析...">{{ user_answer|default:'' }}</textarea>
+        {% elif problem.problem_type == 'code' %}
+            <textarea name="open_answer" class="fill-input" rows="10" placeholder="请输入你的代码实现...">{{ user_answer|default:'' }}</textarea>
+        {% endif %}
+
+        {% if user_answer is not None %}
+            {% if is_correct is None %}
+                <div class="result-box" style="background:rgba(107, 140, 255, 0.12); border-left: 4px solid #6b8cff; color: var(--ink);">
+                    <strong style="color:#a5b8ff;">答案已提交</strong>
+                    <p style="color:var(--ink);">你的答案：<pre style="background:rgba(255,255,255,0.06);margin:8px 0 0;white-space:pre-wrap;padding:8px;border-radius:6px;color:var(--ink);">{{ user_answer }}</pre></p>
+                    <p style="color:#a5b8ff;margin-top:8px;">本题为开放性题目，提交后将由管理员评判。</p>
+                </div>
+            {% elif is_correct %}
+                <div class="result-box result-correct">
+                    <strong>✓ 回答正确！</strong>
+                    <p>你的答案：<code>{{ user_answer }}</code>，正确答案：<code>{{ problem.answer }}</code></p>
+                </div>
+            {% else %}
+                <div class="result-box result-wrong">
+                    <strong>✗ 回答错误</strong>
+                    <p>你的答案：<code>{{ user_answer }}</code>，正确答案：<code>{{ problem.answer }}</code></p>
+                </div>
+            {% endif %}
+            {% if problem.explanation %}
+            <div class="explanation-box">
+                <h3>答案解析</h3>
+                <div class="prose">{{ explanation_html|safe }}</div>
+            </div>
+            {% endif %}
+        {% endif %}
+
+        <div style="margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+            <button class="button" type="submit">提交答案 <span>→</span></button>
+            {% if user_answer is not None %}
+            <a href="." class="button" style="background:transparent;color:var(--ink);border:1px solid var(--ink);">再次作答</a>
+            {% endif %}
+        </div>
+    </form>
+
+    {% include 'club/comment_section.html' %}
+</section>
+{% endblock %}
+{% block extra_js %}
+<script src="{% static 'highlight/highlight.min.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('pre code').forEach(function(block) { hljs.highlightElement(block); });
+});
+</script>
+{% endblock %}

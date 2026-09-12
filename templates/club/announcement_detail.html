@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block title %}{{ announcement.title }} - 公告{% endblock %}
+{% block extra_css %}
+<style>
+.ann-detail .back-link { display:inline-block; color:var(--coral); text-decoration:none; margin-bottom:12px; font-size:14px; }
+.ann-detail .back-link:hover { text-decoration:underline; }
+.ann-detail .card { background:rgba(22, 25, 50, 0.55); backdrop-filter: blur(18px) saturate(140%); border:1px solid var(--line); border-radius:16px; padding:28px 32px; }
+.ann-detail .title-bar { margin-bottom:16px; }
+.ann-detail .title-bar h1 { margin:0 0 8px; font-size:26px; color:var(--ink); }
+.ann-detail .meta { display:flex; gap:14px; align-items:center; flex-wrap:wrap; color:var(--muted); font-size:13px; margin-bottom:20px; }
+.ann-detail .tag { display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:600; }
+.ann-detail .tag-general { background:rgba(107, 140, 255, 0.18); color:#a5b8ff; border:1px solid rgba(107, 140, 255, 0.3); }
+.ann-detail .tag-event { background:rgba(255, 122, 200, 0.12); color:#ff9dd0; border:1px solid rgba(255, 122, 200, 0.3); }
+.ann-detail .tag-study { background:rgba(16, 185, 129, 0.15); color:#6ee7b7; border:1px solid rgba(16, 185, 129, 0.3); }
+.ann-detail .pin-line { border-top:1px solid var(--line); padding-top:16px; margin-top:16px; color:var(--coral); font-size:13px; }
+.ann-detail .content-wrap { line-height:1.8; color:var(--ink); }
+.ann-detail .content-wrap p { margin:0 0 12px; color:var(--ink); }
+.ann-detail .content-wrap h2, .ann-detail .content-wrap h3 { margin:20px 0 10px; color:var(--ink); }
+.ann-detail .content-wrap code { background:rgba(255, 255, 255, 0.08); color:#fbbf24; padding:2px 6px; border-radius:4px; font-size:13px; }
+.ann-detail .content-wrap pre { background:rgba(5, 6, 15, 0.85); border:1px solid var(--line); color:#e5e7eb; padding:16px; border-radius:8px; overflow-x:auto; }
+.ann-detail .content-wrap pre code { background:transparent; color:inherit; padding:0; }
+.ann-detail .content-wrap blockquote { border-left:3px solid var(--coral); margin:12px 0; padding:8px 16px; background:rgba(255, 122, 200, 0.06); color:var(--muted); border-radius:0 8px 8px 0; }
+.ann-detail .content-wrap a { color:var(--coral); }
+.ann-detail .content-wrap ul, .ann-detail .content-wrap ol { padding-left:1.4em; margin:6px 0; }
+.ann-detail .actions { margin-top:20px; display:flex; gap:10px; border-top:1px solid var(--line); padding-top:16px; }
+.ann-detail .btn-edit { padding:8px 16px; background:linear-gradient(135deg, #6b8cff, #8b5cf6); color:white; border-radius:10px; text-decoration:none; font-size:14px; font-weight:500; }
+.ann-detail .btn-edit:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(107, 140, 255, 0.4); }
+.ann-detail .btn-delete { padding:8px 16px; background:linear-gradient(135deg, #ff6b6b, #e74c3c); color:white; border-radius:10px; text-decoration:none; font-size:14px; border:0; cursor:pointer; font-family:inherit; font-weight:500; }
+.ann-detail .btn-delete:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(231, 76, 60, 0.4); }
+</style>
+{% endblock %}
+{% block content %}
+<section class="content-page ann-detail">
+    <a class="back-link" href="{% url 'club:announcement-list' %}">← 返回公告列表</a>
+
+    <div class="card">
+        <div class="title-bar">
+            <h1>{% if announcement.is_pinned %}📌 {% endif %}{{ announcement.title }}</h1>
+            <div class="meta">
+                <span class="tag tag-{{ announcement.category }}">{{ announcement.get_category_display }}</span>
+                <span>{{ announcement.author.profile.nickname|default:announcement.author.username }}</span>
+                <span>{{ announcement.published_at|default:announcement.created_at|date:"Y-m-d H:i" }}</span>
+            </div>
+        </div>
+
+        <div class="content-wrap">
+            {{ html_content|safe }}
+        </div>
+
+        {% if can_edit %}
+        <div class="actions">
+            <a class="btn-edit" href="{% url 'club:announcement-edit' announcement.pk %}">编辑</a>
+            <form method="post" action="{% url 'club:announcement-delete' announcement.pk %}" style="display:inline;" onsubmit="return confirm('确认删除公告「{{ announcement.title }}」？此操作不可撤销。');">
+                {% csrf_token %}
+                <button type="submit" class="btn-delete">删除公告</button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+
+    {% include 'club/comment_section.html' %}
+</section>
+{% endblock %}

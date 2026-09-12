@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}删除资料 - 计算机俱乐部{% endblock %}
+{% block content %}
+<section class="content-page">
+    <p class="eyebrow">DELETE</p>
+    <h1>确认删除资料？</h1>
+    <p style="color:var(--muted);margin-bottom:20px;">该操作不可撤销。关联的文件也将一并从服务器删除。</p>
+    <div class="card" style="max-width:500px;">
+        <div style="font-weight:600;margin-bottom:8px;">{{ resource.title }}</div>
+        <div style="color:var(--muted);font-size:13px;">
+            {{ resource.category.name }} · {{ resource.get_resource_type_display }}
+        </div>
+        <div style="color:var(--muted);font-size:13px;margin-top:4px;">
+            上传者：{{ resource.uploader.profile.nickname|default:resource.uploader.username }} · {{ resource.created_at|date:'Y-m-d H:i' }}
+        </div>
+        {% if resource.file %}
+        <div style="color:#e74c3c;font-size:13px;margin-top:4px;">
+            包含文件：{{ resource.file.name }}
+        </div>
+        {% endif %}
+    </div>
+    <form method="post" style="margin-top:20px;display:flex;gap:10px;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary" style="background:#e74c3c;">确认删除</button>
+        <a href="{% url 'club:resource-detail' resource.pk %}" class="btn">取消</a>
+    </form>
+</section>
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{{ mode }} - 计算机俱乐部{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+{% endblock %}
+{% block content %}
+<section class="content-page">
+    <p class="eyebrow">ADMIN</p>
+    <h1>{{ mode }}</h1>
+
+    <form method="post" enctype="multipart/form-data" style="max-width:760px;margin-top:16px;" novalidate>
+        {% csrf_token %}
+
+        {% if form.errors %}
+        <div style="background:#fdecea;color:#c0392b;padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:14px;">
+            请检查表单中的错误。
+        </div>
+        {% endif %}
+
+        {% for field in form %}
+        <div style="margin-bottom:16px;">
+            <label style="display:block;font-weight:600;margin-bottom:6px;">{{ field.label }}</label>
+            {% if field.field.widget.input_type == 'file' %}
+                <input type="file" name="{{ field.name }}" {% if field.field.required %}required{% endif %} style="padding:8px;">
+            {% elif field.name == 'content' %}
+                {{ field }}
+            {% elif field.field.widget.input_type == 'select' %}
+                {{ field }}
+            {% else %}
+                {{ field }}
+            {% endif %}
+            {% if field.help_text %}
+            <small style="color:var(--muted);">{{ field.help_text }}</small>
+            {% endif %}
+            {% if field.errors %}
+            <div style="color:#c0392b;font-size:13px;margin-top:4px;">{{ field.errors }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        <div style="margin-top:24px;display:flex;gap:10px;">
+            <button type="submit" class="btn btn-primary">保存</button>
+            {% if activity %}
+            <a href="{% url 'club:activity-detail' activity.pk %}" class="btn">取消</a>
+            {% else %}
+            <a href="{% url 'club:activity-list' %}" class="btn">取消</a>
+            {% endif %}
+        </div>
+    </form>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
+<script>
+var activityEditor = new EasyMDE({
+    element: document.getElementById('editor-content'),
+    spellChecker: false,
+    autoDownloadFontAwesome: false,
+    placeholder: '用 Markdown 详细描述活动内容、流程、注意事项...',
+    toolbar: ['bold','italic','heading','|','code','quote','unordered-list','ordered-list','|','link','image','table','|','preview','side-by-side','fullscreen','guide'],
+});
+document.getElementById('editor-content').removeAttribute('required');
+document.querySelector('form').addEventListener('submit', function() {
+    document.getElementById('editor-content').value = activityEditor.value();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}上传资料 - 计算机俱乐部{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.css">
+<style>
+.EasyMDEContainer .CodeMirror { border: 1px solid var(--line); border-radius: 4px; font-family: 'Consolas', 'Fira Code', monospace; }
+.EasyMDEContainer .CodeMirror-focused { border-color: var(--coral); }
+.EasyMDEContainer .editor-toolbar { border: 1px solid var(--line); border-bottom: 0; border-radius: 4px 4px 0 0; }
+</style>
+{% endblock %}
+{% block content %}
+<section class="auth-page resource-upload-page">
+    <p class="eyebrow">SHARE KNOWLEDGE</p>
+    <h1>上传一份资料。</h1>
+    <p class="meta">支持常见文档、压缩包和课件文件，单个文件不超过 50 MB。详细内容区支持 Markdown 与代码块。</p>
+    <form method="post" enctype="multipart/form-data" class="auth-form" novalidate>
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="form-error">{{ form.non_field_errors }}</div>{% endif %}
+        {% for field in form %}
+            {% if field.name == 'content' %}
+                <label>{{ field.label }}{{ field }}{% for error in field.errors %}<small class="form-error">{{ error }}</small>{% endfor %}
+                <small class="form-help">支持 Markdown 语法，使用 ```python 开头可以添加代码块</small></label>
+            {% else %}
+                <label>{{ field.label }}{{ field }}{% for error in field.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label>
+            {% endif %}
+        {% endfor %}
+        <button class="button" type="submit">提交资料 <span>→</span></button>
+    </form>
+</section>
+{% endblock %}
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.js"></script>
+<script>
+var easyMDE = new EasyMDE({
+    element: document.getElementById('editor-content'),
+    spellChecker: false,
+    autosave: { enabled: true, uniqueId: 'resource-content', delay: 300 },
+    toolbar: ['bold', 'italic', 'heading-2', 'heading-3', '|', 'quote', 'unordered-list', 'ordered-list', '|', 'code', 'code-block', 'table', '|', 'link', 'image', '|', 'preview', 'side-by-side', 'fullscreen'],
+    placeholder: '在此输入详细内容，支持 Markdown。\n\n可以用 ```python ... ``` 包裹代码块...',
+    indentWithTabs: false,
+});
+document.getElementById('editor-content').removeAttribute('required');
+document.querySelector('form').addEventListener('submit', function() {
+    document.getElementById('editor-content').value = easyMDE.value();
+});
+</script>
+{% endblock %}

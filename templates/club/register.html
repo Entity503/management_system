@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block title %}注册 - 计算机俱乐部{% endblock %}
+{% block content %}
+<section class="auth-page">
+    <p class="eyebrow">JOIN THE CLUB</p>
+    <h1>从你的邮箱开始。</h1>
+    <p class="meta">注册后即可参加活动、保存资料和记录刷题进度。</p>
+    <form method="post" enctype="multipart/form-data" class="auth-form" id="register-form">
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="form-error">{{ form.non_field_errors }}</div>{% endif %}
+        {% for field in form %}
+            {% if field.name == 'verification_code' %}
+                <label>{{ field.label }}<span class="code-row">{{ field }}<button class="code-button" type="button" id="send-code">获取验证码</button></span>{% for error in field.errors %}<small class="form-error">{{ error }}</small>{% endfor %}<small id="code-message" class="form-help"></small></label>
+            {% else %}
+                <label>{{ field.label }}{{ field }}{% for error in field.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label>
+            {% endif %}
+        {% endfor %}
+        <button class="button" type="submit">创建账号 <span>→</span></button>
+    </form>
+    <p class="auth-foot">已经有账号？<a href="{% url 'club:login' %}">立即登录</a></p>
+</section>
+<script>
+const sendButton = document.querySelector('#send-code');
+const emailInput = document.querySelector('#id_email');
+const message = document.querySelector('#code-message');
+const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+sendButton.addEventListener('click', async () => {
+    sendButton.disabled = true;
+    message.textContent = '正在发送...';
+    const body = new URLSearchParams({email: emailInput.value});
+    const response = await fetch('{% url "club:send-register-code" %}', {
+        method: 'POST',
+        headers: {'X-CSRFToken': csrfToken, 'Content-Type': 'application/x-www-form-urlencoded'},
+        body
+    });
+    const data = await response.json();
+    message.textContent = data.message;
+    if (!response.ok) {
+        sendButton.disabled = false;
+        return;
+    }
+    let seconds = 60;
+    const timer = setInterval(() => {
+        seconds -= 1;
+        sendButton.textContent = `${seconds}s 后重试`;
+        if (seconds <= 0) {
+            clearInterval(timer);
+            sendButton.disabled = false;
+            sendButton.textContent = '获取验证码';
+        }
+    }, 1000);
+});
+</script>
+{% endblock %}

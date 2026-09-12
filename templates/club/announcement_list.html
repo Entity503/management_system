@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% block title %}公告 - 计算机俱乐部{% endblock %}
+{% block extra_css %}
+<style>
+.ann-list .filters { display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; align-items:center; }
+.ann-list .filters a { padding:4px 12px; border-radius:999px; font-size:.78rem; border:1px solid var(--line); color:var(--muted); text-decoration:none; }
+.ann-list .filters a.active { background:var(--ink); color:white; border-color:var(--ink); }
+.ann-list .ann-card { background:white; border-radius:12px; padding:16px 20px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.05); border-left:3px solid transparent; transition:transform .15s; }
+.ann-list .ann-card:hover { transform:translateY(-1px); }
+.ann-list .ann-card.pinned { border-left-color:var(--coral); background:linear-gradient(90deg, #fff5f3 0%, white 40px); }
+.ann-list .ann-card a.title { font-size:.95rem; font-weight:600; color:var(--ink); text-decoration:none; display:block; margin-bottom:4px; }
+.ann-list .ann-card a.title:hover { color:var(--coral); }
+.ann-list .ann-meta { font-size:.74rem; color:var(--muted); display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.ann-list .tag { display:inline-block; padding:2px 8px; border-radius:999px; font-size:.68rem; font-weight:600; }
+.ann-list .tag-general { background:#e0f2fe; color:#075985; }
+.ann-list .tag-event { background:#fef3c7; color:#92400e; }
+.ann-list .tag-study { background:#dcfce7; color:#166534; }
+.ann-list .pin-icon { color:var(--coral); font-weight:700; margin-right:4px; }
+.ann-list .summary { margin-top:6px; color:var(--muted); font-size:.82rem; line-height:1.5; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.ann-list .empty { text-align:center; padding:60px 20px; color:var(--muted); }
+.ann-list .create-btn { margin-left:auto; }
+.ann-list .btn-create { padding:6px 14px; background:var(--coral); color:white; border-radius:8px; text-decoration:none; font-size:.82rem; font-weight:500; }
+</style>
+{% endblock %}
+{% block content %}
+<section class="content-page ann-list">
+    <p class="eyebrow">ANNOUNCEMENTS</p>
+    <h1>公告通知</h1>
+    <p style="color:var(--muted);">俱乐部最新公告和通知。</p>
+
+    <div class="filters">
+        <a href="{% url 'club:announcement-list' %}" class="{% if not active_category %}active{% endif %}">全部</a>
+        <a href="?category=general" class="{% if active_category == 'general' %}active{% endif %}">综合通知</a>
+        <a href="?category=event" class="{% if active_category == 'event' %}active{% endif %}">活动通知</a>
+        <a href="?category=study" class="{% if active_category == 'study' %}active{% endif %}">学习通知</a>
+        {% if user.is_staff %}
+        <div class="create-btn">
+            <a class="btn-create" href="{% url 'club:announcement-create' %}">+ 发布公告</a>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if announcements %}
+    {% for ann in announcements %}
+    <div class="ann-card {% if ann.is_pinned %}pinned{% endif %}">
+        <a class="title" href="{% url 'club:announcement-detail' ann.pk %}">
+            {% if ann.is_pinned %}<span class="pin-icon">📌</span>{% endif %}{{ ann.title }}
+        </a>
+        <div class="ann-meta">
+            <span class="tag tag-{{ ann.category }}">{{ ann.get_category_display }}</span>
+            <span>{{ ann.author.profile.nickname|default:ann.author.username }}</span>
+            <span>{{ ann.published_at|default:ann.created_at|date:"Y-m-d H:i" }}</span>
+        </div>
+        <div class="summary">{{ ann.content|truncatechars:120 }}</div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="empty">暂无公告。</div>
+    {% endif %}
+</section>
+{% endblock %}

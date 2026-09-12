@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+{% block title %}刷题中心 - 计算机俱乐部{% endblock %}
+{% block extra_css %}
+<style>
+.practice-layout {
+    display: grid;
+    gap: 32px;
+    grid-template-columns: 1fr 220px;
+    align-items: start;
+}
+.practice-layout .content-page { margin: 0; max-width: none; }
+.sidebar-box {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    padding: 22px;
+    position: sticky;
+    top: 32px;
+}
+.sidebar-box h3 {
+    font-family: Georgia, serif;
+    font-size: 1.1rem;
+    font-weight: 400;
+    margin: 0 0 6px;
+}
+.sidebar-box .sidebar-sub {
+    color: var(--coral);
+    font-size: .68rem;
+    letter-spacing: .12em;
+    margin-bottom: 18px;
+}
+.sidebar-links {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.sidebar-links a {
+    border-bottom: 1px dashed var(--line);
+    color: var(--ink);
+    font-size: .88rem;
+    padding-bottom: 8px;
+    transition: color .15s;
+}
+.sidebar-links a:hover { color: var(--coral); }
+.sidebar-links .link-domain {
+    color: var(--muted);
+    font-size: .7rem;
+    display: block;
+    margin-top: 2px;
+}
+@media (max-width: 900px) {
+    .practice-layout { grid-template-columns: 1fr; }
+    .sidebar-box { position: static; }
+}
+</style>
+{% endblock %}
+{% block content %}
+<div class="practice-layout">
+<section class="content-page resource-page">
+    <div class="resource-heading">
+        <div><p class="eyebrow">PRACTICE LAB</p><h1>今天，解决一个问题。</h1><p class="meta">选择模块开始刷题，或提交你的好题目。</p></div>
+        <a class="button" href="{% url 'club:problem-create' %}">提交题目 <span>→</span></a>
+    </div>
+    <div class="category-tabs">
+        <a class="{% if not active_category %}active{% endif %}" href="{% url 'club:practice' %}">全部</a>
+        {% for category in categories %}<a class="{% if active_category == category.slug %}active{% endif %}" href="?category={{ category.slug }}">{{ category.name }}</a>{% endfor %}
+    </div>
+    <div class="resource-list">
+    {% for problem in problems %}
+        <article class="resource-item problem-item">
+            <div class="difficulty difficulty-{{ problem.difficulty }}">{{ problem.get_difficulty_display }}</div>
+            <div>
+                <h2><a href="{% url 'club:problem-detail' problem.pk %}">{{ problem.title }}</a></h2>
+                <small>{{ problem.get_problem_type_display }} · {{ problem.category.name }} · {{ problem.created_by.profile.nickname|default:problem.created_by.username }} · {{ problem.created_at|date:'Y-m-d' }} · {{ problem.submission_count }} 次作答</small>
+            </div>
+            <div class="resource-action">
+                <a href="{% url 'club:problem-detail' problem.pk %}">开始解题</a>
+            </div>
+        </article>
+    {% empty %}<p class="empty">这个模块暂时还没有题目，欢迎提交第一题。</p>{% endfor %}
+    </div>
+</section>
+<aside class="sidebar-box">
+    <p class="sidebar-sub">EXTERNAL RESOURCES</p>
+    <h3>刷题网站</h3>
+    <div class="sidebar-links">
+        <a href="https://leetcode.cn/" target="_blank" rel="noopener">
+            LeetCode 中国<span class="link-domain">leetcode.cn</span>
+        </a>
+        <a href="https://leetcode.com/" target="_blank" rel="noopener">
+            LeetCode Global<span class="link-domain">leetcode.com</span>
+        </a>
+        <a href="https://www.acwing.com/" target="_blank" rel="noopener">
+            AcWing<span class="link-domain">acwing.com</span>
+        </a>
+        <a href="https://www.luogu.com.cn/" target="_blank" rel="noopener">
+            洛谷<span class="link-domain">luogu.com.cn</span>
+        </a>
+        <a href="https://www.lanqiao.cn/" target="_blank" rel="noopener">
+            蓝桥云课<span class="link-domain">lanqiao.cn</span>
+        </a>
+        <a href="https://www.matiji.net/" target="_blank" rel="noopener">
+            码题集<span class="link-domain">matiji.net</span>
+        </a>
+        <a href="https://pintia.cn/" target="_blank" rel="noopener">
+            拼题 A · Pintia<span class="link-domain">pintia.cn</span>
+        </a>
+        <a href="https://www.nowcoder.com/" target="_blank" rel="noopener">
+            牛客网<span class="link-domain">nowcoder.com</span>
+        </a>
+        <a href="https://codeforces.com/" target="_blank" rel="noopener">
+            Codeforces<span class="link-domain">codeforces.com</span>
+        </a>
+        <a href="https://atcoder.jp/" target="_blank" rel="noopener">
+            AtCoder<span class="link-domain">atcoder.jp</span>
+        </a>
+        <a href="https://hackerrank.com/" target="_blank" rel="noopener">
+            HackerRank<span class="link-domain">hackerrank.com</span>
+        </a>
+        <a href="https://www.codechef.com/" target="_blank" rel="noopener">
+            CodeChef<span class="link-domain">codechef.com</span>
+        </a>
+    </div>
+</aside>
+</div>
+{% endblock %}

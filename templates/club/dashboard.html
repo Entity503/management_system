@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+{% block title %}俱乐部工作台{% endblock %}
+{% block extra_css %}
+<style>
+.hero-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-top: 22px;
+}
+.hero-actions a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--ink);
+    text-decoration: none;
+    font-size: .85rem;
+    transition: border-color .2s, background .2s, transform .15s;
+}
+.hero-actions a:hover {
+    border-color: rgba(107, 140, 255, 0.5);
+    background: rgba(107, 140, 255, 0.12);
+    transform: translateY(-1px);
+}
+.hero-actions .ha-icon {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+.ha-practice .ha-icon   { background: linear-gradient(135deg, #6b8cff, #8b5cf6); }
+.ha-announce .ha-icon  { background: linear-gradient(135deg, #ff7ac8, #ff765f); }
+.ha-activity .ha-icon  { background: linear-gradient(135deg, #7ee8c8, #3dd9b2); }
+.ha-resource .ha-icon  { background: linear-gradient(135deg, #fbbf24, #f97316); }
+.ha-chat .ha-icon      { background: linear-gradient(135deg, #a78bfa, #6366f1); }
+.ha-profile .ha-icon   { background: linear-gradient(135deg, #6b8cff, #0ea5e9); }
+.hero-actions .ha-label { display: flex; flex-direction: column; min-width: 0; }
+.hero-actions .ha-title { font-weight: 600; font-size: .85rem; color: var(--ink); }
+.hero-actions .ha-sub { font-size: .68rem; color: var(--muted); margin-top: 2px; }
+.hero-actions .ha-disabled { opacity: .45; pointer-events: none; }
+
+.quick-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 36px;
+}
+.quick-card {
+    display: flex;
+    flex-direction: column;
+    padding: 16px 18px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    text-decoration: none;
+    color: inherit;
+    transition: border-color .2s, transform .15s;
+}
+.quick-card:hover { border-color: rgba(107, 140, 255, 0.5); transform: translateY(-2px); }
+.quick-card .qc-head {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+}
+.quick-card .qc-icon {
+    width: 28px; height: 28px; border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .88rem;
+}
+.quick-card .qc-title { font-size: .88rem; font-weight: 600; color: var(--ink); }
+.quick-card .qc-num {
+    font-family: Georgia, serif;
+    font-size: 1.4rem;
+    background: linear-gradient(135deg, #6b8cff, #ff7ac8);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 2px;
+}
+.quick-card .qc-sub { font-size: .7rem; color: var(--muted); }
+
+@media (max-width: 780px) {
+    .quick-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+    .quick-grid { grid-template-columns: 1fr; }
+}
+</style>
+{% endblock %}
+{% block content %}
+<section class="hero">
+    <p class="eyebrow">COMPUTER CLUB / 2026</p>
+    <h1>把兴趣，组织成<br><em>真正的成长。</em></h1>
+    <p class="hero-copy">活动、资料、题库与 AI 助手，集中在一个安静而高效的工作台。</p>
+
+    <div class="hero-actions">
+        <a class="ha-practice" href="{% url 'club:practice' %}">
+            <span class="ha-icon">🧠</span>
+            <span class="ha-label"><span class="ha-title">刷题中心</span><span class="ha-sub">{{ problem_count }} 道公开题</span></span>
+        </a>
+        <a class="ha-announce" href="{% url 'club:announcement-list' %}">
+            <span class="ha-icon">📢</span>
+            <span class="ha-label"><span class="ha-title">公告通知</span><span class="ha-sub">{{ announcements|length }} 条最新</span></span>
+        </a>
+        <a class="ha-activity" href="{% url 'club:activity-list' %}">
+            <span class="ha-icon">🎯</span>
+            <span class="ha-label"><span class="ha-title">社团活动</span><span class="ha-sub">查看排期</span></span>
+        </a>
+        {% if user.is_authenticated %}
+        <a class="ha-resource" href="{% url 'club:resources' %}">
+            <span class="ha-icon">📚</span>
+            <span class="ha-label"><span class="ha-title">学习资料</span><span class="ha-sub">{{ resource_count }} 份资源</span></span>
+        </a>
+        <a class="ha-chat" href="{% url 'club:ai-chat' %}">
+            <span class="ha-icon">🤖</span>
+            <span class="ha-label"><span class="ha-title">AI 助手</span><span class="ha-sub">随时提问</span></span>
+        </a>
+        <a class="ha-profile" href="{% url 'club:profile' %}">
+            <span class="ha-icon">👤</span>
+            <span class="ha-label"><span class="ha-title">我的资料</span><span class="ha-sub">{{ user.profile.nickname|default:user.username }}</span></span>
+        </a>
+        {% endif %}
+    </div>
+</section>
+
+<section class="stats">
+    <div><strong>{{ member_count }}</strong><span>活跃成员</span></div>
+    <div><strong>{{ resource_count }}</strong><span>学习资料</span></div>
+    <div><strong>{{ problem_count }}</strong><span>公开题目</span></div>
+</section>
+
+<section class="grid-layout">
+    <div class="panel">
+        <div class="panel-heading"><h2>最新公告</h2><span>NOTICE</span></div>
+        {% for announcement in announcements %}
+        <article class="list-item"><div><b>{{ announcement.title }}</b><p>{{ announcement.content|truncatechars:90 }}</p></div><time>{{ announcement.created_at|date:'m.d' }}</time></article>
+        {% empty %}<p class="empty">暂时还没有公告。</p>{% endfor %}
+    </div>
+    <div class="panel accent-panel">
+        <div class="panel-heading"><h2>即将开始</h2><span>EVENTS</span></div>
+        {% for activity in activities %}
+        <a class="event-item" href="{{ activity.get_absolute_url }}"><time>{{ activity.start_time|date:'m月d日 H:i' }}</time><b>{{ activity.title }}</b><small>{{ activity.location|default:'线上活动' }} · {{ activity.signup_count }}/{{ activity.capacity }} 人</small></a>
+        {% empty %}<p class="empty">还没有已发布的活动。</p>{% endfor %}
+    </div>
+</section>
+{% endblock %}

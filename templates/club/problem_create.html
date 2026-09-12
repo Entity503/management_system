@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}{% if is_edit %}编辑题目{% else %}提交题目{% endif %} - 计算机俱乐部{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.css">
+<style>
+.EasyMDEContainer .CodeMirror { border: 1px solid var(--line); border-radius: 4px; font-family: 'Consolas', 'Fira Code', monospace; }
+.EasyMDEContainer .CodeMirror-focused { border-color: var(--coral); }
+.EasyMDEContainer .editor-toolbar { border: 1px solid var(--line); border-bottom: 0; border-radius: 4px 4px 0 0; }
+</style>
+{% endblock %}
+{% block content %}
+<section class="auth-page resource-upload-page">
+    <p class="eyebrow">{% if is_edit %}EDIT PROBLEM{% else %}CONTRIBUTE{% endif %}</p>
+    <h1>{% if is_edit %}编辑题目「{{ problem.title }}」{% else %}提交一道好题目。{% endif %}</h1>
+    <p class="meta">支持 Markdown 编写题目与解析，代码块使用 <code>```python</code> 包裹。{% if is_edit %}修改后点击保存即可。{% else %}提交后立即发布。{% endif %}</p>
+    <form method="post" class="auth-form" novalidate>
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="form-error">{{ form.non_field_errors }}</div>{% endif %}
+        {% for field in form %}
+            {% if field.name in 'content,explanation' %}
+                <label>
+                    {{ field.label }}
+                    {{ field }}
+                    {% for error in field.errors %}<small class="form-error">{{ error }}</small>{% endfor %}
+                    <small class="form-help">支持 Markdown，```python ... ``` 添加代码块</small>
+                </label>
+            {% else %}
+                <label>{{ field.label }}{{ field }}{% for error in field.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label>
+            {% endif %}
+        {% endfor %}
+        <button class="button" type="submit" style="margin-top:16px">{% if is_edit %}保存修改{% else %}发布题目{% endif %} <span>→</span></button>
+    </form>
+</section>
+{% endblock %}
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.js"></script>
+<script>
+var contentEditor = new EasyMDE({
+    element: document.getElementById('editor-content'),
+    spellChecker: false,
+    autosave: { enabled: true, uniqueId: 'problem-content', delay: 300 },
+    toolbar: ['bold', 'italic', 'heading-2', 'heading-3', '|', 'quote', 'unordered-list', 'ordered-list', '|', 'code', 'code-block', 'table', '|', 'link', '|', 'preview', 'side-by-side', 'fullscreen'],
+    placeholder: '编写题目内容，可以用 ```python 开头插入代码示例...',
+});
+var explanationEditor = new EasyMDE({
+    element: document.getElementById('editor-explanation'),
+    spellChecker: false,
+    autosave: { enabled: true, uniqueId: 'problem-explanation', delay: 300 },
+    toolbar: ['bold', 'italic', 'heading-3', '|', 'quote', 'unordered-list', 'ordered-list', '|', 'code', 'code-block', '|', 'preview', 'fullscreen'],
+    placeholder: '编写答案解析，解释为什么正确...',
+});
+document.getElementById('editor-content').removeAttribute('required');
+document.getElementById('editor-explanation').removeAttribute('required');
+document.querySelector('form').addEventListener('submit', function() {
+    document.getElementById('editor-content').value = contentEditor.value();
+    document.getElementById('editor-explanation').value = explanationEditor.value();
+});
+</script>
+{% endblock %}

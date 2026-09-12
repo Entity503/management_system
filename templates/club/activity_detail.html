@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{{ activity.title }} - 计算机俱乐部{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'highlight/github-dark.min.css' %}">
+{% endblock %}
+{% block content %}
+<section class="content-page">
+    <p class="eyebrow">EVENT DETAIL</p>
+
+    {% if is_admin %}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:10px;">
+        <h1 style="margin:0;">{{ activity.title }}</h1>
+        <div style="display:flex;gap:8px;">
+            <span class="badge badge-coral">{{ activity.get_status_display }}</span>
+            {% if activity.status != 'published' %}
+            <form method="post" action="{% url 'club:activity-status' activity.pk %}" style="display:inline;">
+                {% csrf_token %}
+                <input type="hidden" name="status" value="published">
+                <button type="submit" class="btn btn-primary" style="padding:6px 12px;font-size:13px;">发布</button>
+            </form>
+            {% endif %}
+            {% if activity.status == 'draft' %}
+            <form method="post" action="{% url 'club:activity-status' activity.pk %}" style="display:inline;">
+                {% csrf_token %}
+                <input type="hidden" name="status" value="published">
+                <button type="submit" class="btn btn-primary" style="padding:6px 12px;font-size:13px;">发布</button>
+            </form>
+            {% endif %}
+            <a href="{% url 'club:activity-edit' activity.pk %}" class="btn" style="padding:6px 12px;font-size:13px;">编辑</a>
+            <a href="{% url 'club:activity-delete' activity.pk %}" class="btn" style="padding:6px 12px;font-size:13px;background:#e74c3c;color:white;">删除</a>
+        </div>
+    </div>
+    {% else %}
+    <h1>{{ activity.title }}</h1>
+    {% endif %}
+
+    <p class="meta">
+        🕐 {{ activity.start_time|date:'Y年m月d日 H:i' }} - {{ activity.end_time|date:'H:i' }}
+        {% if activity.location %} · 📍 {{ activity.location }}{% else %} · 📍 线上活动{% endif %}
+    </p>
+    <p class="meta" style="color:var(--muted);">
+        报名截止：{{ activity.signup_deadline|date:'m月d日 H:i' }} · 当前 {{ activity.signup_count }} / {{ activity.capacity }} 人
+    </p>
+
+    {% if activity.cover %}
+    <div style="margin:16px 0 20px;">
+        <img src="{{ activity.cover.url }}" alt="" style="max-width:100%;border-radius:16px;box-shadow:var(--shadow);">
+    </div>
+    {% endif %}
+
+    <div class="prose">
+        {{ activity.content_html|safe }}
+    </div>
+
+    {% if activity.signup_count > 0 %}
+    <div class="callout">已有 {{ activity.signup_count }} 位同学报名参加，名额 {% if activity.signup_count >= activity.capacity %}已满{% else %}充足{% endif %}。</div>
+    {% else %}
+    <div class="callout">活动开始前仍可报名，欢迎积极参与！</div>
+    {% endif %}
+
+    {% if is_admin %}
+    <div style="margin-top:28px;padding:16px;border-top:1px solid var(--line);">
+        <h4 style="margin-bottom:12px;color:var(--ink);">管理操作</h4>
+        <form method="post" action="{% url 'club:activity-status' activity.pk %}" style="display:flex;gap:8px;align-items:center;">
+            {% csrf_token %}
+            <label style="font-size:13px;color:var(--muted);">状态切换：</label>
+            <select name="status" style="padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,0.05);color:var(--ink);font-family:inherit;">
+                {% for key, label in activity.STATUS_CHOICES %}
+                <option value="{{ key }}" {% if activity.status == key %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary" style="padding:6px 14px;font-size:13px;">更新状态</button>
+        </form>
+    </div>
+    {% endif %}
+
+    {% include 'club/comment_section.html' %}
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release/build/highlight.min.js"></script>
+<script>document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('pre code').forEach(b => hljs.highlightElement(b)); });</script>
+{% endblock %}

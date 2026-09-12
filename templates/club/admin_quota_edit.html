@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block title %}编辑 AI 配额 - 超级管理员{% endblock %}
+{% block content %}
+<section class="content-page">
+    <p class="eyebrow">EDIT QUOTA</p>
+    <h1>编辑 AI 配额</h1>
+    <p style="color:var(--muted);margin-bottom:20px;">调整 <strong>{{ target.email }}</strong> 的 AI 使用上限。</p>
+
+    <div class="card" style="max-width:520px;margin-bottom:20px;">
+        <div style="font-weight:600;margin-bottom:8px;">{{ target.profile.nickname|default:target.username }}</div>
+        <div style="color:var(--muted);font-size:13px;">
+            {% if target.is_staff %}管理员 · {% endif %}{{ target.profile.student_id|default:"" }} · 注册于 {{ target.date_joined|date:"Y-m-d" }}
+        </div>
+        <div style="color:var(--muted);font-size:13px;margin-top:4px;">
+            累计会话 {{ quota.total_conversations|default:0 }} 次 · 累计 Token {{ quota.total_tokens_used|default:0 }}
+        </div>
+    </div>
+
+    <form method="post" class="auth-form" style="max-width:520px;">
+        {% csrf_token %}
+        <label>
+            每日新建会话上限
+            <input type="number" name="max_conversations_per_day" min="1" max="9999" value="{{ quota.max_conversations_per_day }}" required>
+            <small class="form-help">用户每天最多能新建多少个 AI 会话，默认 10</small>
+        </label>
+        <label>
+            单会话最大体积 (MB)
+            <input type="number" name="max_conversation_size_mb" min="1" max="1024" value="{{ quota.max_conversation_size_mb }}" required>
+            <small class="form-help">单个会话（含所有历史消息）的总字节数上限，默认 64</small>
+        </label>
+        <div style="display:flex;gap:10px;margin-top:16px;">
+            <button type="submit" class="button">保存 <span>→</span></button>
+            <a href="{% url 'club:admin-quotas' %}" class="button" style="background:transparent;color:var(--ink);border:1px solid var(--ink);">取消</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

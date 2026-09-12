@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block title %}登录 - 计算机俱乐部{% endblock %}
+{% block content %}
+<section class="auth-page">
+    <p class="eyebrow">MEMBER ACCESS</p>
+    <h1>欢迎回来。</h1>
+    <p class="meta">使用注册邮箱登录你的俱乐部工作台。</p>
+    <form method="post" class="auth-form">
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="form-error">{{ form.non_field_errors }}</div>{% endif %}
+        {% for field in form %}
+            <label>{{ field.label }}{{ field }}{% for error in field.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label>
+        {% endfor %}
+        <button class="button" type="submit">登录 <span>→</span></button>
+    </form>
+    <p class="auth-foot">还没有账号？<a href="{% url 'club:register' %}">邮箱注册</a></p>
+</section>
+{% endblock %}

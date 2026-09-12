@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% block title %}{% if mode == 'edit' %}编辑公告{% else %}发布公告{% endif %} - 计算机俱乐部{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+<style>
+.ann-form .card { background:white; border-radius:12px; padding:28px 32px; box-shadow:0 1px 3px rgba(0,0,0,.05); max-width:780px; }
+.ann-form label { display:block; font-weight:600; margin:16px 0 6px; font-size:14px; }
+.ann-form input[type=text], .ann-form select { width:100%; padding:10px 14px; border:1px solid var(--line); border-radius:8px; font-family:inherit; font-size:14px; box-sizing:border-box; }
+.ann-form input[type=text]:focus, .ann-form select:focus { outline:none; border-color:var(--coral); }
+.ann-form .row { display:flex; gap:16px; }
+.ann-form .row > div { flex:1; }
+.ann-form .checkbox-row { margin-top:18px; }
+.ann-form .checkbox-row label { display:flex; align-items:center; gap:8px; cursor:pointer; margin:0; font-weight:500; }
+.ann-form .checkbox-row input { width:18px; height:18px; }
+.ann-form .actions { margin-top:24px; display:flex; gap:10px; }
+.ann-form .btn { padding:10px 22px; border-radius:8px; border:0; cursor:pointer; font-family:inherit; font-size:14px; font-weight:500; text-decoration:none; display:inline-block; }
+.ann-form .btn-primary { background:var(--coral); color:white; }
+.ann-form .btn-secondary { background:var(--ink); color:white; }
+.ann-form .btn-cancel { background:transparent; color:var(--ink); border:1px solid var(--line); }
+</style>
+{% endblock %}
+{% block content %}
+<section class="content-page ann-form">
+    <p class="eyebrow">ADMIN</p>
+    <h1>{% if mode == 'edit' %}编辑公告{% else %}发布公告{% endif %}</h1>
+
+    <form method="post" class="card" novalidate>
+        {% csrf_token %}
+
+        <label>标题</label>
+        <input type="text" name="title" value="{{ announcement.title|default:'' }}" placeholder="公告标题，简洁明了" required>
+
+        <div class="row">
+            <div>
+                <label>分类</label>
+                <select name="category">
+                    {% for value, label in category_choices %}
+                    <option value="{{ value }}" {% if announcement.category|default:'general' == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label>&nbsp;</label>
+                <div class="checkbox-row">
+                    <label>
+                        <input type="checkbox" name="is_pinned" {% if announcement.is_pinned %}checked{% endif %}>
+                        📌 置顶显示
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <label>内容（支持 Markdown）</label>
+        <textarea id="editor-content" name="content" placeholder="用 Markdown 撰写公告内容，支持标题、列表、代码块、表格等..." required>{{ announcement.content|default:'' }}</textarea>
+
+        <div class="actions">
+            <button type="submit" class="btn btn-primary">
+                {% if mode == 'edit' %}保存修改{% else %}立即发布{% endif %}
+            </button>
+            {% if mode == 'edit' and announcement %}
+            <a href="{% url 'club:announcement-detail' announcement.pk %}" class="btn btn-cancel">取消</a>
+            {% else %}
+            <a href="{% url 'club:announcement-list' %}" class="btn btn-cancel">取消</a>
+            {% endif %}
+        </div>
+    </form>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
+<script>
+var annEditor = new EasyMDE({
+    element: document.getElementById('editor-content'),
+    spellChecker: false,
+    autoDownloadFontAwesome: false,
+    minHeight: '200px',
+    placeholder: '用 Markdown 撰写公告内容...',
+    toolbar: ['bold','italic','heading','|','code','quote','unordered-list','ordered-list','|','link','image','table','|','preview','side-by-side','fullscreen','guide'],
+});
+document.getElementById('editor-content').removeAttribute('required');
+document.querySelector('form').addEventListener('submit', function() {
+    document.getElementById('editor-content').value = annEditor.value();
+});
+</script>
+{% endblock %}

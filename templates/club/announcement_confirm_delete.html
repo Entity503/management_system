@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}删除公告 - 计算机俱乐部{% endblock %}
+{% block content %}
+<section class="content-page">
+    <p class="eyebrow">DELETE</p>
+    <h1>确认删除公告</h1>
+
+    <div style="background:#fff5f3;border:1px solid #fecaca;border-radius:12px;padding:24px;margin-top:16px;max-width:640px;">
+        <p style="font-size:16px;margin:0 0 8px;color:#991b1b;">确定要删除以下公告吗？</p>
+        <p style="font-size:18px;font-weight:600;margin:0 0 4px;">{{ announcement.title }}</p>
+        <p style="color:var(--muted);margin:0;font-size:13px;">
+            分类：{{ announcement.get_category_display }} ·
+            作者：{{ announcement.author.profile.nickname|default:announcement.author.username }} ·
+            {{ announcement.published_at|default:announcement.created_at|date:"Y-m-d H:i" }}
+        </p>
+        <p style="color:#991b1b;margin-top:16px;font-size:13px;">⚠️ 此操作不可撤销。</p>
+    </div>
+
+    <form method="post" style="margin-top:20px;display:flex;gap:12px;">
+        {% csrf_token %}
+        <button type="submit" style="padding:10px 24px;background:#dc2626;color:white;border:0;border-radius:8px;font-family:inherit;font-size:14px;cursor:pointer;">确认删除</button>
+        <a href="{% url 'club:announcement-detail' announcement.pk %}" style="padding:10px 24px;border:1px solid var(--line);border-radius:8px;color:var(--ink);text-decoration:none;font-size:14px;">返回</a>
+    </form>
+</section>
+{% endblock %}

@@ -1,0 +1,136 @@
+<section class="comments-section">
+    <h3 class="comments-title">💬 评论区 <span class="count">({{ comment_count }})</span></h3>
+
+    {% if user.is_authenticated %}
+    <form method="post" action="{% url 'club:comment-create' %}" class="comment-form" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="model" value="{{ comment_model }}">
+        <input type="hidden" name="object_id" value="{{ comment_target_id }}">
+        <div class="comment-input-row">
+            {% if user.profile.avatar %}
+            <img class="cmt-avatar" src="{{ user.profile.avatar.url }}" alt="">
+            {% else %}
+            <div class="cmt-avatar cmt-avatar-placeholder">{{ user.profile.nickname|default:user.username|slice:"0:1" }}</div>
+            {% endif %}
+            <div class="cmt-input-wrap">
+                <textarea id="comment-editor" name="content" placeholder="留下你的评论，支持 Markdown..." maxlength="1000" required></textarea>
+                <div class="cmt-input-footer">
+                    <span class="cmt-hint">支持 Markdown · 最多 1000 字</span>
+                    <button type="submit" class="cmt-submit">发布评论</button>
+                </div>
+            </div>
+        </div>
+    </form>
+    {% else %}
+    <div class="cmt-login-hint">
+        <a href="{% url 'club:login' %}">登录</a> 后即可参与评论。
+    </div>
+    {% endif %}
+
+    <div class="cmt-list">
+        {% for c in comments %}
+        <div class="cmt-item">
+            {% if c.author.profile.avatar %}
+            <img class="cmt-avatar" src="{{ c.author.profile.avatar.url }}" alt="">
+            {% else %}
+            <div class="cmt-avatar cmt-avatar-placeholder">{{ c.author.profile.nickname|default:c.author.username|slice:"0:1" }}</div>
+            {% endif %}
+            <div class="cmt-body">
+                <div class="cmt-meta">
+                    <span class="cmt-name">{{ c.author.profile.nickname|default:c.author.username }}</span>
+                    {% if c.author.is_staff %}<span class="cmt-badge-admin">管理员</span>{% endif %}
+                    <span class="cmt-time">{{ c.created_at|date:"Y-m-d H:i" }}</span>
+
+                    {% if user.is_staff %}
+                    <span class="cmt-admin-only" title="仅管理员可见">
+                        · {{ c.author.username }}
+                        {% if c.author.profile.real_name %}({{ c.author.profile.real_name }}){% endif %}
+                        {% if c.author.profile.student_id %} · 学号 {{ c.author.profile.student_id }}{% endif %}
+                    </span>
+                    {% endif %}
+
+                    {% if c.can_delete %}
+                    <form method="post" action="{% url 'club:comment-delete' c.pk %}" style="display:inline;margin-left:auto;" onsubmit="return confirm('删除这条评论？');">
+                        {% csrf_token %}
+                        <button type="submit" class="cmt-del-btn" title="删除评论">删除</button>
+                    </form>
+                    {% endif %}
+                </div>
+                <div class="cmt-content">{{ c.html_content|safe }}</div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="cmt-empty">暂无评论，来抢沙发吧～</div>
+        {% endfor %}
+    </div>
+</section>
+
+<style>
+.comments-section { margin-top: 40px; border-top: 1px solid var(--line); padding-top: 24px; }
+.comments-title { font-size: 18px; margin: 0 0 18px; color: var(--ink); }
+.comments-title .count { color: var(--muted); font-weight: 400; font-size: 15px; }
+
+.comment-form { margin-bottom: 28px; }
+.comment-input-row { display: flex; gap: 12px; }
+.cmt-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: var(--line); border: 1px solid var(--line); }
+.cmt-avatar-placeholder { display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; background: linear-gradient(135deg, var(--coral), #ff765f); }
+.cmt-input-wrap { flex: 1; }
+.cmt-input-wrap textarea { width: 100%; min-height: 80px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; resize: vertical; font-family: inherit; font-size: 14px; box-sizing: border-box; background: rgba(255, 255, 255, 0.05); color: var(--ink); }
+.cmt-input-wrap textarea:focus { outline: none; border-color: var(--coral); background: rgba(255, 122, 200, 0.06); }
+.cmt-input-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+.cmt-hint { font-size: 12px; color: var(--muted); }
+.cmt-submit { padding: 6px 18px; background: linear-gradient(135deg, var(--coral), #ff765f); color: white; border: 0; border-radius: 8px; cursor: pointer; font-family: inherit; font-size: 13px; transition: transform .15s, box-shadow .2s; }
+.cmt-submit:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(255, 122, 200, 0.4); }
+
+.cmt-login-hint { padding: 16px; background: rgba(22, 25, 50, 0.55); border: 1px solid var(--line); border-radius: 10px; color: var(--muted); font-size: 14px; margin-bottom: 20px; backdrop-filter: blur(10px); }
+.cmt-login-hint a { color: var(--coral); font-weight: 500; }
+
+.cmt-list { display: flex; flex-direction: column; gap: 16px; }
+.cmt-item { display: flex; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.cmt-item:last-child { border-bottom: 0; }
+.cmt-body { flex: 1; min-width: 0; }
+.cmt-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; font-size: 13px; }
+.cmt-name { font-weight: 600; color: var(--ink); }
+.cmt-badge-admin { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: linear-gradient(135deg, var(--coral), #ff765f); color: white; font-weight: 500; }
+.cmt-time { color: var(--muted); }
+.cmt-admin-only { color: #6b7280; font-size: 12px; font-style: italic; }
+.cmt-del-btn { background: none; border: 0; color: #ff6b6b; cursor: pointer; font-size: 12px; padding: 2px 6px; border-radius: 4px; transition: background .15s; }
+.cmt-del-btn:hover { background: rgba(239, 68, 68, 0.15); }
+.cmt-content { color: var(--ink); font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+.cmt-content p { margin: 0 0 6px; color: var(--ink); }
+.cmt-content code { background: rgba(255, 255, 255, 0.08); color: #fbbf24; padding: 1px 5px; border-radius: 3px; font-family: 'Consolas', monospace; font-size: .9em; }
+.cmt-content pre { background: rgba(5, 6, 15, 0.85); border: 1px solid var(--line); padding: 10px 14px; border-radius: 8px; overflow-x: auto; }
+.cmt-content pre code { background: transparent; color: #a5f3fc; padding: 0; }
+.cmt-content blockquote { border-left: 3px solid var(--coral); background: rgba(255, 122, 200, 0.08); color: var(--muted); margin: 8px 0; padding: 4px 12px; border-radius: 0 8px 8px 0; }
+.cmt-content a { color: var(--coral); text-decoration: underline; }
+.cmt-content ul, .cmt-content ol { padding-left: 1.4em; margin: 4px 0; }
+.cmt-empty { text-align: center; padding: 40px 0; color: var(--muted); font-size: 14px; }
+</style>
+
+{% if user.is_authenticated %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+<script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
+<script>
+(function() {
+    var ta = document.getElementById('comment-editor');
+    if (!ta) return;
+    ta.removeAttribute('required');
+    var commentEditor = new EasyMDE({
+        element: ta,
+        spellChecker: false,
+        autoDownloadFontAwesome: false,
+        minHeight: '100px',
+        maxHeight: '300px',
+        placeholder: '用 Markdown 写评论...',
+        toolbar: ['bold','italic','heading','|','code','quote','unordered-list','ordered-list','|','link','preview'],
+        status: ['autosave', 'lines', 'words', 'cursor'],
+    });
+    var form = ta.closest('form');
+    if (form) {
+        form.addEventListener('submit', function() {
+            ta.value = commentEditor.value();
+        });
+    }
+})();
+</script>
+{% endif %}

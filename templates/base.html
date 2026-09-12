@@ -1,0 +1,40 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}计算机俱乐部{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/site.css' %}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+<canvas id="starfield"></canvas>
+<div id="nebula"></div>
+<header class="topbar">
+    <a class="brand" href="{% url 'club:dashboard' %}">CC<span>/</span> CLUB</a>
+    <nav>
+        <a href="{% url 'club:dashboard' %}">首页</a>
+        <a href="{% url 'club:announcement-list' %}">公告</a>
+        <a href="{% url 'club:activity-list' %}">活动</a>
+        <a href="{% url 'club:practice' %}">刷题</a>
+        {% if user.is_authenticated %}<a href="{% url 'club:resources' %}">学习资料</a>{% endif %}
+        {% if user.is_authenticated %}<a href="{% url 'club:ai-chat' %}">AI 助手</a>{% endif %}
+        {% if user.is_authenticated %}
+            <a href="{% url 'club:profile' %}">{{ user.profile.nickname }}</a>
+            {% if user.profile.avatar %}<img class="nav-avatar" src="{{ user.profile.avatar.url }}" alt="{{ user.profile.nickname }}">{% endif %}
+            <a href="{% url 'club:logout' %}">退出</a>
+        {% else %}
+            <a href="{% url 'club:login' %}">登录</a>
+            <a href="{% url 'club:register' %}">注册</a>
+        {% endif %}
+        {% if user.is_staff %}<a href="{% url 'club:admin-users' %}">管理员后台</a>{% endif %}
+    </nav>
+</header>
+{% if messages %}<div class="messages">{% for message in messages %}<div>{{ message }}</div>{% endfor %}</div>{% endif %}
+<main>{% block content %}{% endblock %}</main>
+<footer>Computer Club Management System</footer>
+<script src="{% static 'js/stars.js' %}"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

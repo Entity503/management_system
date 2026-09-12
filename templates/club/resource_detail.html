@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{{ resource.title }} - 计算机俱乐部{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'highlight/github-dark.min.css' %}">
+{% endblock %}
+{% block content %}
+<section class="content-page resource-page">
+    <p class="eyebrow">{{ resource.category.name }}</p>
+    <h1>{{ resource.title }}</h1>
+    <p class="meta">{{ resource.uploader.profile.nickname|default:resource.uploader.username }} · {{ resource.created_at|date:'Y-m-d H:i' }} · {{ resource.download_count }} 次下载</p>
+    {% if resource.description %}<p class="callout">{{ resource.description }}</p>{% endif %}
+    {% if resource.content %}
+    <div class="prose">{{ content_html|safe }}</div>
+    {% else %}
+    <p class="empty">该资料暂无详细内容。</p>
+    {% endif %}
+    <div style="margin-top: 48px; display: flex; gap: 16px;">
+        {% if resource.file %}<a class="button" href="{% url 'club:resource-download' resource.pk %}">下载文件 <span>↓</span></a>{% endif %}
+        <a class="button" style="background: transparent; color: var(--ink); border: 1px solid var(--ink);" href="{% url 'club:resources' %}">返回列表 <span>←</span></a>
+        {% if user.is_authenticated and user.is_staff or user.is_authenticated and user == resource.uploader %}
+        <a class="button" style="background: #e74c3c;" href="{% url 'club:resource-delete' resource.pk %}">删除资料</a>
+        {% endif %}
+    </div>
+
+    {% include 'club/comment_section.html' %}
+</section>
+{% endblock %}
+{% block extra_js %}
+<script src="{% static 'highlight/highlight.min.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.prose pre code').forEach(function (block) {
+        hljs.highlightElement(block);
+    });
+});
+</script>
+{% endblock %}

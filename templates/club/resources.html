@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}学习资料 - 计算机俱乐部{% endblock %}
+{% block content %}
+<section class="content-page resource-page">
+    <div class="resource-heading">
+        <div><p class="eyebrow">KNOWLEDGE LIBRARY</p><h1>学习资料。</h1><p class="meta">按课程模块整理知识，把有用的内容留给下一位成员。</p></div>
+        <a class="button" href="{% url 'club:resource-upload' %}">上传资料 <span>→</span></a>
+    </div>
+    <div class="category-tabs">
+        <a class="{% if not active_category %}active{% endif %}" href="{% url 'club:resources' %}">全部</a>
+        {% for category in categories %}<a class="{% if active_category == category.slug %}active{% endif %}" href="?category={{ category.slug }}">{{ category.name }}</a>{% endfor %}
+    </div>
+    <div class="resource-list">
+        {% for resource in resources %}
+        <article class="resource-item">
+            <div class="resource-type">{{ resource.get_resource_type_display }}</div>
+            <div><h2><a href="{% url 'club:resource-detail' resource.pk %}">{{ resource.title }}</a></h2><p>{{ resource.description|default:'暂无资料简介。'|truncatechars:120 }}</p><small>{{ resource.category.name }} · {{ resource.uploader.profile.nickname|default:resource.uploader.username }} · {{ resource.created_at|date:'Y-m-d' }}</small></div>
+            <div class="resource-action"><span>{{ resource.download_count }} 次下载</span><a href="{% url 'club:resource-detail' resource.pk %}">查看详情</a>{% if resource.file %}<a href="{% url 'club:resource-download' resource.pk %}">下载</a>{% endif %}</div>
+        </article>
+        {% empty %}<p class="empty">这个分类暂时还没有资料，欢迎上传第一份。</p>{% endfor %}
+    </div>
+</section>
+{% endblock %}
