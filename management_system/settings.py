@@ -23,7 +23,7 @@ DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() == 'true'
 
 ALLOWED_HOSTS = [
     host.strip()
-    for host in os.getenv('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost,.onrender.com,.railway.app').split(',')
+    for host in os.getenv('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost,.onrender.com,.railway.app,.pythonanywhere.com').split(',')
     if host.strip()
 ]
 
