@@ -141,9 +141,9 @@ MEDIA_ROOT = BASE_DIR / 'media'
 #       > PlainConsoleBackend（开发调试，验证码明文打印到 Server log）
 
 if os.getenv('RESEND_API_KEY'):
-    EMAIL_BACKEND = 'resend.backends.ResendBackend'
+    EMAIL_BACKEND = 'club.email_backends.ResendBackend'
     RESEND_API_KEY = os.getenv('RESEND_API_KEY')
-    DEFAULT_FROM_EMAIL = os.getenv('RESEND_FROM_EMAIL', 'no-reply@example.com')
+    DEFAULT_FROM_EMAIL = os.getenv('RESEND_FROM_EMAIL', 'onboarding@resend.dev')
 elif os.getenv('SENDGRID_API_KEY'):
     EMAIL_BACKEND = 'sendgrid_backend.SendgridBackend'
     SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')
