@@ -135,21 +135,10 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 
 # Email
-# 优先级：RESEND_API_KEY（HTTP API，免费版每天 3000 封）
-#       > SENDGRID_API_KEY（HTTP API）
-#       > QQ SMTP（本地/Render/Railway 可用）
-#       > PlainConsoleBackend（开发调试，验证码明文打印到 Server log）
+# 优先级：QQ SMTP（本地/Render/Railway 可用）
+#       > PlainConsoleBackend（验证码明文打印到 Server log）
 
-if os.getenv('RESEND_API_KEY'):
-    EMAIL_BACKEND = 'club.email_backends.ResendBackend'
-    RESEND_API_KEY = os.getenv('RESEND_API_KEY')
-    DEFAULT_FROM_EMAIL = os.getenv('RESEND_FROM_EMAIL', 'onboarding@resend.dev')
-elif os.getenv('SENDGRID_API_KEY'):
-    EMAIL_BACKEND = 'sendgrid_backend.SendgridBackend'
-    SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')
-    SENDGRID_SANDBOX_MODE_IN_DEBUG = False
-    DEFAULT_FROM_EMAIL = os.getenv('SENDGRID_FROM_EMAIL', 'no-reply@example.com')
-elif os.getenv('QQ_EMAIL_USER') and os.getenv('QQ_EMAIL_PASSWORD'):
+if os.getenv('QQ_EMAIL_USER') and os.getenv('QQ_EMAIL_PASSWORD'):
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
     EMAIL_HOST = os.getenv('QQ_EMAIL_HOST', 'smtp.qq.com')
     EMAIL_PORT = int(os.getenv('QQ_EMAIL_PORT', '465'))
@@ -160,6 +149,8 @@ elif os.getenv('QQ_EMAIL_USER') and os.getenv('QQ_EMAIL_PASSWORD'):
 else:
     EMAIL_BACKEND = 'club.email_backends.PlainConsoleBackend'
     DEFAULT_FROM_EMAIL = 'no-reply@example.com'
+
+DEFAULT_REGISTER_CODE = '114514'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_URL = '/login/'
