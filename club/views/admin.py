@@ -1,10 +1,11 @@
 """
 管理员后台（自定义页面，不是 Django Admin）
 ============================================
-成员管理（Staff 开关）、AI 配额管理（超管专属）、系统总览。
+成员管理（Staff 开关与删除）、AI 配额管理（超管专属）、系统总览。
 
 权限边界：
 - admin_users / admin_toggle_staff：is_staff=True 即可
+- admin_user_delete：只有 SUPER_ADMIN_EMAIL 一个人
 - admin_quotas / admin_quota_edit：只有 SUPER_ADMIN_EMAIL 一个人
 """
 
@@ -149,4 +150,21 @@ def admin_toggle_staff(request, pk):
             messages.success(request, f'已授予 {display_name} 的管理员权限。')
         return redirect('club:admin-users')
 
+    return redirect('club:admin-users')
+
+
+@user_passes_test(lambda u: u.is_authenticated and u.username == SUPER_ADMIN_EMAIL)
+def admin_user_delete(request, pk):
+    """删除用户及其关联数据，仅超级管理员可执行。"""
+    if request.method != 'POST':
+        return redirect('club:admin-users')
+
+    target = get_object_or_404(User, pk=pk)
+    if target.username == SUPER_ADMIN_EMAIL or target == request.user:
+        messages.error(request, '不能删除超级管理员账号。')
+        return redirect('club:admin-users')
+
+    display_name = target.email or target.username
+    target.delete()
+    messages.success(request, f'已删除用户 {display_name}。')
     return redirect('club:admin-users')

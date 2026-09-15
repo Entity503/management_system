@@ -21,6 +21,7 @@ from .admin import (
     admin_quotas,
     admin_quota_edit,
     admin_toggle_staff,
+    admin_user_delete,
     admin_users,
 )
 from .ai import (

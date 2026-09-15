@@ -84,6 +84,7 @@ urlpatterns = [
     # ------------------------------------------------------------------
     path('admin/users/', views.admin_users, name='admin-users'),
     path('admin/users/<int:pk>/toggle-staff/', views.admin_toggle_staff, name='admin-toggle-staff'),
+    path('admin/users/<int:pk>/delete/', views.admin_user_delete, name='admin-user-delete'),
     path('admin/quotas/', views.admin_quotas, name='admin-quotas'),
     path('admin/quotas/<int:pk>/edit/', views.admin_quota_edit, name='admin-quota-edit'),
 

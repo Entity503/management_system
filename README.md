@@ -15,7 +15,7 @@
 - 📢 **公告发布**：置顶、分类、Markdown 渲染、管理员 CRUD
 - 🤖 **多智能体 AI 助手**：5 种角色 + 多会话 + 上下文记忆 + 配额管理，DeepSeek / 阿里云百炼双通道自动回退
 - 💬 **通用评论系统**：基于 Django ContentType 的 GenericForeignKey，支持活动 / 公告 / 题目 / 资料四种实体
-- 🛠️ **管理员后台**：成员管理（Staff 开关）、AI 配额调整、Django Admin 全模型操作
+- 🛠️ **管理员后台**：成员管理（Staff 开关与用户删除）、AI 配额调整、Django Admin 全模型操作
 
 ---
 
@@ -32,7 +32,7 @@
 | **活动** | 创建 / 编辑 / 删除、报名 / 取消 / 候补、签到、状态管理 |
 | **公告** | 发布 / 编辑 / 删除、置顶、分类筛选 |
 | **评论** | 通用评论（活动 / 公告 / 题目 / 资料）、删除（作者 / 管理员） |
-| **管理后台** | 成员 Staff 权限切换、AI 配额调整 |
+| **管理后台** | 成员 Staff 权限切换、超级管理员删除用户、AI 配额调整 |
 | **资料分类** | 10 个内置分类：数据结构 / 计组 / 网络 / 操作系统 / C++ / Java / Python / MySQL / 离散数学 / 其它 |
 
 ### 5 种 AI 智能体
@@ -251,7 +251,7 @@ python manage.py runserver
 | 活动详情 | `/activities/<id>/` | 登录 |
 | 公告列表 | `/announcements/` | 公开 |
 | 公告详情 | `/announcements/<id>/` | 公开 |
-| 管理员 - 成员管理 | `/admin/users/` | Staff |
+| 管理员 - 成员管理 | `/admin/users/` | Staff（删除用户仅超级管理员） |
 | 管理员 - AI 配额 | `/admin/quotas/` | **超管**（SUPER_ADMIN_EMAIL） |
 | Django Admin | `/django-admin/` | Superuser |
 

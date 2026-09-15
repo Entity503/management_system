@@ -19,6 +19,7 @@
 .admin-users .btn-revoke { background: #dc2626; color: white; }
 .admin-users .btn-self { background: #e5e7eb; color: #6b7280; cursor: not-allowed; }
 .admin-users .btn-super { background: #fce7f3; color: #9d174d; cursor: not-allowed; border: 1px dashed #f9a8d4; }
+.admin-users .btn-delete { background: #991b1b; color: white; }
 .admin-users .muted { color: var(--muted); }
 .admin-users .stats { display: flex; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
 .admin-users .stat-card { background: white; border-radius: 10px; padding: 16px 22px; min-width: 140px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
@@ -40,11 +41,11 @@
 
     {% if is_super_admin %}
     <div class="notice notice-super">
-        👑 你是超级管理员 <strong>{{ super_admin_email }}</strong>，拥有授予和撤销管理员权限的完整能力。
+        👑 你是超级管理员 <strong>{{ super_admin_email }}</strong>，拥有授予、撤销管理员权限和删除用户的完整能力。
     </div>
     {% else %}
     <div class="notice notice-other">
-        你是普通管理员，可以授予新管理员。只有 <strong>{{ super_admin_email }}</strong> 能撤销其他管理员权限。
+        你是普通管理员，可以授予新管理员。只有 <strong>{{ super_admin_email }}</strong> 能撤销权限或删除用户。
     </div>
     {% endif %}
 
@@ -127,6 +128,12 @@
                     <button class="btn-sm btn-self" disabled>当前账号</button>
                     {% elif u.is_staff %}
                         {% if is_super_admin %}
+                        <form method="post" action="{% url 'club:admin-user-delete' u.pk %}" style="display:inline;" onsubmit="return confirm('确认永久删除 {{ u.email }} 及其全部数据？此操作不可恢复。');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-sm btn-delete">删除用户</button>
+                        </form>
+                        {% endif %}
+                        {% if is_super_admin %}
                         <form method="post" action="{% url 'club:admin-toggle-staff' u.pk %}" style="display:inline;" onsubmit="return confirm('确认撤销 {{ u.email }} 的管理员权限？');">
                             {% csrf_token %}
                             <button type="submit" class="btn-sm btn-revoke">撤销权限</button>
@@ -135,6 +142,12 @@
                         <button class="btn-sm btn-self" disabled>需要超级管理员</button>
                         {% endif %}
                     {% else %}
+                    {% if is_super_admin %}
+                    <form method="post" action="{% url 'club:admin-user-delete' u.pk %}" style="display:inline;" onsubmit="return confirm('确认永久删除 {{ u.email }} 及其全部数据？此操作不可恢复。');">
+                        {% csrf_token %}
+                        <button type="submit" class="btn-sm btn-delete">删除用户</button>
+                    </form>
+                    {% endif %}
                     <form method="post" action="{% url 'club:admin-toggle-staff' u.pk %}" style="display:inline;" onsubmit="return confirm('授予 {{ u.email }} 管理员权限？');">
                         {% csrf_token %}
                         <button type="submit" class="btn-sm btn-grant">设为管理员</button>
