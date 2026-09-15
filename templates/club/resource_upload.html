@@ -13,7 +13,7 @@
 <section class="auth-page resource-upload-page">
     <p class="eyebrow">SHARE KNOWLEDGE</p>
     <h1>上传一份资料。</h1>
-    <p class="meta">支持常见文档、压缩包和课件文件，单个文件不超过 50 MB。详细内容区支持 Markdown 与代码块。</p>
+    <p class="meta">支持常见文档、压缩包和课件文件，单个文件不超过 1 GB。详细内容区支持 Markdown 与代码块。</p>
     <form method="post" enctype="multipart/form-data" class="auth-form" novalidate>
         {% csrf_token %}
         {% if form.non_field_errors %}<div class="form-error">{{ form.non_field_errors }}</div>{% endif %}

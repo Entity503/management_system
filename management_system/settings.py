@@ -133,6 +133,11 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# 单个学习资料文件最大 1 GiB。使用临时文件处理器，避免大文件占满内存。
+RESOURCE_MAX_FILE_SIZE = 1024 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+DATA_UPLOAD_MAX_MEMORY_SIZE = RESOURCE_MAX_FILE_SIZE + 10 * 1024 * 1024
+
 
 # Email
 # 优先级：Resend HTTP API（适合 PythonAnywhere 免费环境）
