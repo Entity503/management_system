@@ -55,7 +55,7 @@ def admin_quotas(request):
     """
     管理员后台 - AI 配额管理（仅超管可访问）。
 
-    功能：调整每个用户的 max_conversations_per_day 和 max_conversation_size_mb。
+    功能：调整每个用户的 AI 请求、会话和体积上限。
     额外展示系统总览：累计消耗了多少 Token、累计创建了多少会话。
     """
     for u in User.objects.all():
@@ -94,6 +94,7 @@ def admin_quota_edit(request, pk):
     if request.method == 'POST':
         try:
             quota.max_conversations_per_day = max(1, int(request.POST.get('max_conversations_per_day', 10)))
+            quota.max_requests_per_day = max(1, int(request.POST.get('max_requests_per_day', 5)))
             quota.max_conversation_size_mb = max(1, int(request.POST.get('max_conversation_size_mb', 64)))
             quota.save()
             try:

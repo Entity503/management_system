@@ -24,6 +24,11 @@
             <small class="form-help">用户每天最多能新建多少个 AI 会话，默认 10</small>
         </label>
         <label>
+            每日 AI 请求上限
+            <input type="number" name="max_requests_per_day" min="1" max="9999" value="{{ quota.max_requests_per_day }}" required>
+            <small class="form-help">用户每天最多实际调用 AI 多少次，默认 5</small>
+        </label>
+        <label>
             单会话最大体积 (MB)
             <input type="number" name="max_conversation_size_mb" min="1" max="1024" value="{{ quota.max_conversation_size_mb }}" required>
             <small class="form-help">单个会话（含所有历史消息）的总字节数上限，默认 64</small>

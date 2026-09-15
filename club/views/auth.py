@@ -42,9 +42,9 @@ def register(request):
     form = RegisterForm(request.POST or None, request.FILES or None)
     if request.method == 'POST' and form.is_valid():
         email = form.cleaned_data['email']
-        DEFAULT_CODE = getattr(settings, 'DEFAULT_REGISTER_CODE', '114514')
+        default_code = getattr(settings, 'DEFAULT_REGISTER_CODE', '114514')
         code_input = form.cleaned_data['verification_code']
-        is_default = code_input == DEFAULT_CODE
+        is_default = bool(default_code) and code_input == default_code
         is_valid = (
             request.session.get('register_code') == code_input
             and request.session.get('register_code_email') == email

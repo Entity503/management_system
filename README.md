@@ -296,9 +296,12 @@ python manage.py runserver
 | 字段 | 默认值 | 说明 |
 |------|--------|------|
 | `max_conversations_per_day` | 10 | 每日新建会话上限 |
+| `max_requests_per_day` | 5 | 每日实际调用 AI 上限 |
 | `max_conversation_size_mb` | 64 | 单个会话体积上限 |
 | `total_conversations` | — | 累计会话数（只读） |
 | `total_tokens_used` | — | 累计消耗 Token（只读） |
+
+AI 接口仅允许登录用户访问，并限制单条消息长度和请求频率。删除会话不会恢复当天已经消耗的 AI 请求次数。
 
 ### 对话流程
 
@@ -357,6 +360,7 @@ mysqlclient>=2.2,<3.0
 Pillow>=10.0,<13.0
 markdown>=3.5,<4.0
 requests>=2.31,<3.0
+resend>=2.0,<3.0
 ```
 
 ---

@@ -13,6 +13,8 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.core.cache import cache
+from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -22,6 +24,8 @@ from ..models import AIConversation, AIMessage, AIQuota
 
 
 SUPER_ADMIN_EMAIL = settings.SUPER_ADMIN_EMAIL
+AI_MESSAGE_MAX_LENGTH = 4000
+AI_REQUEST_COOLDOWN_SECONDS = 3
 
 
 def _is_super_admin(user):
@@ -50,6 +54,24 @@ def _enforce_ai_quota(user):
     if today_count >= quota.max_conversations_per_day:
         return False, f'今日新建会话数已达上限（{quota.max_conversations_per_day}），明天再来吧。', quota
     return True, None, quota
+
+
+def _consume_ai_request(user):
+    """原子消耗一次每日 AI 请求额度，避免并发请求绕过限制。"""
+    if _is_super_admin(user):
+        return True, None
+
+    with transaction.atomic():
+        quota, _ = AIQuota.objects.select_for_update().get_or_create(user=user)
+        today = timezone.localdate()
+        if quota.daily_requests_date != today:
+            quota.daily_requests = 0
+            quota.daily_requests_date = today
+        if quota.daily_requests >= quota.max_requests_per_day:
+            return False, f'今日 AI 请求次数已达上限（{quota.max_requests_per_day}），明天再来吧。'
+        quota.daily_requests += 1
+        quota.save(update_fields=['daily_requests', 'daily_requests_date', 'updated_at'])
+    return True, None
 
 
 def _check_conversation_size(conversation, quota):
@@ -178,6 +200,16 @@ def ai_api_send(request):
     message_text = request.POST.get('message', '').strip()
     if not message_text:
         return JsonResponse({'error': '消息不能为空'}, status=400)
+    if len(message_text) > AI_MESSAGE_MAX_LENGTH:
+        return JsonResponse({'error': f'单条消息不能超过 {AI_MESSAGE_MAX_LENGTH} 个字符。'}, status=400)
+
+    cooldown_key = f'ai-request-cooldown:{request.user.pk}'
+    if not cache.add(cooldown_key, True, AI_REQUEST_COOLDOWN_SECONDS):
+        return JsonResponse({'ok': False, 'error': '请求过于频繁，请稍后再试。'}, status=429)
+
+    ok, reason = _consume_ai_request(request.user)
+    if not ok:
+        return JsonResponse({'ok': False, 'error': reason}, status=403)
 
     is_new = not request.POST.get('conversation_id')
     if is_new:

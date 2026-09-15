@@ -135,10 +135,16 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 
 # Email
-# 优先级：QQ SMTP（本地/Render/Railway 可用）
-#       > PlainConsoleBackend（验证码明文打印到 Server log）
+# 优先级：Resend HTTP API（适合 PythonAnywhere 免费环境）
+#       > QQ SMTP（本地或允许 SMTP 出站的生产环境）
+#       > PlainConsoleBackend（仅开发调试）
 
-if os.getenv('QQ_EMAIL_USER') and os.getenv('QQ_EMAIL_PASSWORD'):
+RESEND_API_KEY = os.getenv('RESEND_API_KEY', '')
+
+if RESEND_API_KEY:
+    EMAIL_BACKEND = 'club.email_backends.ResendBackend'
+    DEFAULT_FROM_EMAIL = os.getenv('RESEND_FROM_EMAIL', '')
+elif os.getenv('QQ_EMAIL_USER') and os.getenv('QQ_EMAIL_PASSWORD'):
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
     EMAIL_HOST = os.getenv('QQ_EMAIL_HOST', 'smtp.qq.com')
     EMAIL_PORT = int(os.getenv('QQ_EMAIL_PORT', '465'))
@@ -150,7 +156,7 @@ else:
     EMAIL_BACKEND = 'club.email_backends.PlainConsoleBackend'
     DEFAULT_FROM_EMAIL = 'no-reply@example.com'
 
-DEFAULT_REGISTER_CODE = '114514'
+DEFAULT_REGISTER_CODE = os.getenv('DEFAULT_REGISTER_CODE', '114514')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_URL = '/login/'

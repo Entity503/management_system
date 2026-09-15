@@ -4,6 +4,7 @@ djangorestframework>=3.15,<4.0
 Pillow>=10.0,<13.0
 markdown>=3.5,<4.0
 requests>=2.31,<3.0
+resend>=2.0,<3.0
 
 # 数据库驱动（二选一，本地用 MySQL 则装 mysqlclient，生产 Render 用 PostgreSQL 装 psycopg2）
 mysqlclient>=2.2,<3.0

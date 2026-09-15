@@ -62,14 +62,18 @@ class AIQuota(models.Model):
     AI 使用配额。每个用户有一条记录，可在管理员后台调整。
 
     - max_conversations_per_day：每日新建会话上限
+    - max_requests_per_day：每日实际调用 AI 接口上限
     - max_conversation_size_mb：单会话体积上限（防止上下文无限增长）
     - total_conversations / total_tokens_used：累计统计（只读）
     """
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='ai_quota')
     max_conversations_per_day = models.PositiveIntegerField('每日新建会话上限', default=10)
+    max_requests_per_day = models.PositiveIntegerField('每日 AI 请求上限', default=5)
     max_conversation_size_mb = models.PositiveIntegerField('单会话最大体积 (MB)', default=64)
     total_conversations = models.PositiveIntegerField('累计会话数', default=0)
     total_tokens_used = models.PositiveBigIntegerField('累计消耗 Token', default=0)
+    daily_requests = models.PositiveIntegerField('今日请求数', default=0)
+    daily_requests_date = models.DateField('请求统计日期', null=True, blank=True)
     updated_at = models.DateTimeField('更新时间', auto_now=True)
 
     class Meta:
