@@ -10,7 +10,7 @@
         {% if form.non_field_errors %}<div class="form-error">{{ form.non_field_errors }}</div>{% endif %}
         {% for field in form %}
             {% if field.name == 'verification_code' %}
-                <label>{{ field.label }}<span class="code-row">{{ field }}<button class="code-button" type="button" id="send-code">获取验证码</button></span>{% for error in field.errors %}<small class="form-error">{{ error }}</small>{% endfor %}<small id="code-message" class="form-help"></small></label>
+                <label>{{ field.label }}<span class="code-row">{{ field }}<button class="code-button" type="button" id="send-code">获取验证码</button></span><small class="form-help">由于发送邮件需要购买域名，当前暂时可以输入“114514”通过验证。</small>{% for error in field.errors %}<small class="form-error">{{ error }}</small>{% endfor %}<small id="code-message" class="form-help"></small></label>
             {% else %}
                 <label>{{ field.label }}{{ field }}{% for error in field.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label>
             {% endif %}
