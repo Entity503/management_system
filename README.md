@@ -6,7 +6,7 @@
 
 ## ✨ 亮点特性
 
-- 🌌 **星空主题界面**：深色渐变背景 + Canvas 动态星空 + 流星 + 鼠标点击粒子爆发特效，玻璃态磨砂导航栏
+- 🌌 **真实星空馆**：5044 颗恒星 + 88 星座（真实赤经赤纬投影），可拖拽 / 缩放探索，单击流星雨、星座科普、待机自转与纯净模式
 - 🔐 **QQ 邮箱验证码注册**：60 秒频控、10 分钟有效期，SMTP 授权码安全发送
 - 👤 **完整用户资料**：昵称 / 头像 / 学号 / 专业 / 年级 / 技能标签 / 积分
 - 📚 **学习资料中心**：分类筛选、Markdown + 代码高亮、下载统计、权限可见性（公开 / 成员 / 管理员）
@@ -31,6 +31,7 @@
 | **刷题** | 题目列表筛选、答题判分、用户出题、错题记录、Markdown 解析 |
 | **AI** | 多会话、6 种角色、Token 统计、每日配额、双通道 Provider 回退 |
 | **AI 建稿** | 运营助手生成题目 / 公告 / 活动草稿 → 本人确认后发布 → 审计日志 |
+| **星空馆** | 真实星表渲染、拖拽 / 缩放、流星雨、星座信息卡、待机自转、纯净模式 |
 | **活动** | 创建 / 编辑 / 删除、报名 / 取消 / 候补、签到、状态管理 |
 | **公告** | 发布 / 编辑 / 删除、置顶、分类筛选 |
 | **评论** | 通用评论（活动 / 公告 / 题目 / 资料）、删除（作者 / 管理员） |
@@ -87,13 +88,14 @@ management_system/
 │   │   ├── auth.py          #   RegisterForm / LoginForm / ProfileForm
 │   │   ├── resources.py     #   ResourceForm
 │   │   ├── problems.py      #   ProblemForm
+│   │   ├── ai.py            #   AnnouncementDraftForm（草稿编辑）
 │   │   └── activities.py    #   ActivityForm
 │   ├── services/            # 服务层（跨视图复用）
 │   │   ├── ai_actions.py    #   草稿解析 / 校验 / 权限 / 落库 / 审计
 │   │   ├── ai_tools.py      #   function calling 工具（查询 + 建稿）
 │   │   ├── agent_runner.py  #   多轮工具调用循环（最多 3 轮）
 │   │   └── platform_context.py # 平台快照，注入 System Prompt
-│   ├── tests/               # 测试（草稿服务 + 建稿链路，34 个用例）
+│   ├── tests/               # 测试（草稿 / 工具 / 流式 / 体验 / 服务，74 个用例）
 │   ├── views/               # 视图子包（按业务域拆分）
 │   │   ├── __init__.py      #   统一 re-export（外部 import 完全兼容原 views.py）
 │   │   ├── auth.py          #   注册 / 登录 / 退出 / 个人资料
@@ -109,7 +111,7 @@ management_system/
 │   ├── admin.py             # Django Admin 注册配置
 │   └── migrations/          # 数据库迁移 + 初始分类种子数据
 ├── templates/               # Django 模板（继承 base.html）
-│   ├── base.html            # 基础布局（导航栏 / 星空 canvas / 粒子特效脚本）
+│   ├── base.html            # 基础布局（固定导航栏 / 星空 canvas / 星座信息卡）
 │   └── club/                # 业务模板
 │       ├── dashboard.html           # 首页工作台 + 快捷入口
 │       ├── profile.html              # 个人资料
@@ -129,9 +131,16 @@ management_system/
 │       └── admin_quotas.html         # 管理员 - AI 配额
 ├── static/
 │   ├── css/site.css         # 全局星空主题样式（CSS Variables / 玻璃态 / 响应式）
-│   ├── js/stars.js          # Canvas 动态星空 + 流星 + 鼠标视差 + 点击粒子爆发
+│   ├── sky/                 # 星空馆：sky.json（星表 + 星座）、sky.js（渲染与交互）
+│   ├── js/stars.js          # 旧版程序化星空（已被 static/sky/sky.js 取代）
 │   ├── bootstrap5/          # Bootstrap 5 本地副本
 │   └── highlight/           # highlight.js 代码高亮（185 种语言）
+├── scripts/                 # 数据构建
+│   ├── build_sky_data.py    # 把原始星表压成 static/sky/sky.json
+│   └── data/                # 原始星表与星座简介（不参与部署）
+├── docs/                    # 设计与运维文档
+│   ├── AI_AGENT_UPGRADE_PLAN.md
+│   └── SKY_BACKGROUND.md
 ├── media/                   # 用户上传文件（avatars / resources）
 ├── .env.example             # 环境变量示例
 ├── requirements.txt         # Python 依赖
@@ -146,7 +155,7 @@ management_system/
 |------|------|
 | **后端** | Django 5.2 LTS · Django ORM · GenericForeignKey |
 | **数据库** | MySQL 8（生产）· SQLite（开发测试） |
-| **前端** | Django Templates · CSS Variables · backdrop-filter 玻璃态 · Canvas API |
+| **前端** | Django Templates · CSS Variables · backdrop-filter 玻璃态 · Canvas 2D 球极投影星图 |
 | **Markdown** | EasyMDE 富文本编辑器 · Python `markdown` 库 + highlight.js |
 | **AI** | DeepSeek API · 阿里云百炼 API · requests SDK |
 | **邮件** | QQ SMTP（授权码）· 控制台后端（开发模式） |
@@ -291,7 +300,56 @@ python manage.py runserver
 }
 ```
 
-`static/js/stars.js` 实现三层视差星空、流星动画、鼠标移动视差、点击粒子爆发（多色物理模拟）。导航栏和面板使用 `backdrop-filter: blur(14px)` 实现磨砂玻璃效果。
+`static/sky/sky.js` 实现真实星表渲染（球极投影）、拖拽平移、缩放、流星雨与星座信息卡；详见下方「星空馆」。导航栏使用 `position: fixed` + `backdrop-filter: blur(18px)` 实现固定在顶部的磨砂玻璃效果。
+
+---
+
+## 🌌 星空馆
+
+背景不是随机撒点，而是按**真实赤经赤纬**投影的星空：
+
+| 项目 | 数据 |
+|------|------|
+| 恒星 | 5044 颗（星等 ≤ 6，含 B−V 色指数），来自 HYG Database |
+| 星座 | 88 个、743 条连线，来自 d3-celestial（BSD-3） |
+| 中文名 | 统一为简体标准星座名 |
+| 简介 | 88 条本地撰写科普文案（不依赖外部 API） |
+| 体积 | `sky.json` 159 KB（gzip 54 KB），同源加载 |
+
+### 交互
+
+| 操作 | 效果 |
+|------|------|
+| 拖拽 | 平移天球 |
+| Ctrl / ⌘ + 滚轮 | 缩放（视场 20°–140°） |
+| 双击 | 复位 |
+| 单击空白 | 召唤流星雨 |
+| 单击星座 | 弹出信息卡（中英文名 / 坐标 / 主要亮星 / 简介） |
+| **S** | 进入 / 退出纯净模式（只留星空） |
+| **Esc** | 关闭信息卡；再按退出纯净模式 |
+
+### 可调节项
+
+HUD 上三个按钮循环切换，档位存 `localStorage`：
+
+- **自转**：关 / 慢 0.4°/s / 中 1.5°/s / 快 4°/s（停手 3.5 秒后启动）
+- **流星**：关 / 低 70–150s / 中 30–70s / 高 12–30s（随机位置与规模）
+- **纯净**：隐藏导航与正文，仅保留星空
+
+### 性能策略
+
+- 星点只在视角变化时重绘；流星画在独立 `#sky-fx` 图层，不触发星空重绘
+- 低端机（`deviceMemory ≤ 4` 或 `hardwareConcurrency ≤ 4`）自动降星等、限制 DPR 与帧率
+- 尊重 `prefers-reduced-motion`（不生成环境流星）
+
+### 重新生成星表数据
+
+```powershell
+python scripts/build_sky_data.py
+```
+
+> 原始星表放在 `scripts/data/`（不参与部署），生成物 `static/sky/sky.json` 请勿手改。
+> 数据来源与许可见 [docs/SKY_BACKGROUND.md](docs/SKY_BACKGROUND.md)。
 
 ---
 
@@ -394,6 +452,7 @@ AI 接口仅允许登录用户访问，并限制单条消息长度和请求频�
 6. **内容发布**：AI 建稿必须由创建者本人确认后才会落库；手工入口（出题 / 上传资料）仍是提交即生效，权限规则保持一致
 7. **图片 / 文件上传**：必须保留表单校验，不能只依赖前端限制
 8. **新增模块**：先保持在 `club/` 内实现，稳定后再考虑拆分应用
+9. **星空数据**：改 `scripts/data/` 后运行 `python scripts/build_sky_data.py`，不要手改 `static/sky/sky.json`；星座简介写在 `scripts/data/constellation_info.json`
 
 ---
 
@@ -420,6 +479,9 @@ python manage.py createsuperuser
 
 # 收集静态文件（生产环境）
 python manage.py collectstatic --noinput
+
+# 重新生成星空数据（修改 scripts/data/ 后）
+python scripts/build_sky_data.py
 ```
 
 ---
@@ -447,12 +509,13 @@ resend>=2.0,<3.0
 - ✅ 完整刷题模块（7 种题型 / 用户出题 / 审核发布）
 - ✅ 活动报名 / 签到 / 状态管理
 - ✅ 公告发布与分类
-- ✅ 多智能体 AI 助手（5 种角色 / 双通道 Provider）
+- ✅ 多智能体 AI 助手（6 种角色 / 双通道 Provider）
 - ✅ AI 配额管理
 - ✅ AI 建稿工作台（运营助手 + 草稿确认 + 审计）
 - ✅ 平台快照注入（AI 知道社团当前有什么）
+- ✅ AI 体验增强（讲解这题 / 草稿编辑 / 重新生成 / 反馈 / 流式）
 - ✅ 通用评论系统
-- ✅ 星空主题 UI + 粒子特效
+- ✅ 星空馆（真实星表 + 88 星座 + 拖拽探索 + 星座科普）
 - ✅ 管理员后台
 - ⬜ RAG 资料问答
 - ⬜ DRF REST API
