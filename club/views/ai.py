@@ -23,7 +23,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.db import transaction
-from django.http import JsonResponse, StreamingHttpResponse
+from django.http import Http404, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -36,9 +36,12 @@ from ..agents import (
     DEFAULT_AGENT,
     TOOL_AGENTS,
 )
-from ..models import AIConversation, AIDraft, AIMessage, AIQuota
+from ..forms import ActivityForm, ProblemForm
+from ..forms.ai import AnnouncementDraftForm
+from ..models import AIConversation, AIDraft, AIMessage, AIQuota, Problem, Resource
 from ..services import agent_runner
 from ..services.ai_actions import (
+    VALIDATORS,
     DraftError,
     apply_draft,
     can_publish,
@@ -128,8 +131,16 @@ def _recent_history(conversation):
     """取最近 N 条对话作为上下文。"""
     recent = conversation.messages.filter(
         role__in=['user', 'assistant']
-    ).order_by('-created_at')[:AI_HISTORY_LIMIT]
+    ).order_by('-created_at', '-pk')[:AI_HISTORY_LIMIT]
     return list(reversed(recent))
+
+
+def _conversation_context(user, conversation):
+    """平台快照 + 会话自带的上下文（例如「这道题」的题面）。"""
+    parts = [build_platform_context(user)]
+    if conversation.context_note:
+        parts.append(conversation.context_note)
+    return '\n\n'.join(part for part in parts if part)
 
 
 def _normalize_agent_type(agent_type):
@@ -313,25 +324,14 @@ def ai_conversation_delete(request, pk):
 
 
 # ---------------------------------------------------------------------------
-# 发送（非流式，JSON）
+# 执行一次对话（发送 / 重新生成共用）
 # ---------------------------------------------------------------------------
-@login_required
-def ai_api_send(request):
+def _execute_exchange(request, conversation, quota, message_text):
     """
-    AI 消息发送（AJAX 核心接口，返回 JSON）。
+    落用户消息 → 调模型或工具 → 落助手消息。
 
-    - 工具型智能体：走 agent_runner 多轮循环（查数据 / 建草稿）
-    - 聊天型智能体：单轮调用
+    返回 (response_data, error_response)，二选一。
     """
-    message_text, error = _read_message(request)
-    if error:
-        return error
-
-    prepared = _prepare_exchange(request)
-    if isinstance(prepared, JsonResponse):
-        return prepared
-    conversation, quota = prepared
-
     history = _recent_history(conversation)
     AIMessage.objects.create(conversation=conversation, role='user', content=message_text)
     _touch_conversation(conversation, message_text)
@@ -339,7 +339,7 @@ def ai_api_send(request):
     draft = None
     trace = []
     try:
-        context = build_platform_context(request.user)
+        context = _conversation_context(request.user, conversation)
         if conversation.agent_type in TOOL_AGENTS:
             result = agent_runner.run_with_tools(
                 conversation.agent_type, history, message_text, context, request.user,
@@ -358,7 +358,7 @@ def ai_api_send(request):
             conversation=conversation, role='assistant',
             content='⚠️ AI 暂时无法回复，请稍后再试。',
         )
-        return JsonResponse(
+        return None, JsonResponse(
             {'ok': False, 'error': 'AI 服务暂时不可用，请稍后再试。', 'conversation_id': conversation.pk},
             status=200,
         )
@@ -386,9 +386,62 @@ def ai_api_send(request):
         'model': result.get('model', ''),
         'provider': result.get('provider', ''),
         'tools': trace,
+        'message_id': assistant_msg.pk,
     }
     if draft is not None and draft.status == 'pending':
         response_data['draft'] = _draft_payload(draft)
+    return response_data, None
+
+
+# ---------------------------------------------------------------------------
+# 发送（非流式，JSON）
+# ---------------------------------------------------------------------------
+@login_required
+def ai_api_send(request):
+    """
+    AI 消息发送（AJAX 核心接口，返回 JSON）。
+
+    - 工具型智能体：走 agent_runner 多轮循环（查数据 / 建草稿）
+    - 聊天型智能体：单轮调用
+    """
+    message_text, error = _read_message(request)
+    if error:
+        return error
+
+    prepared = _prepare_exchange(request)
+    if isinstance(prepared, JsonResponse):
+        return prepared
+    conversation, quota = prepared
+
+    response_data, error_response = _execute_exchange(request, conversation, quota, message_text)
+    if error_response:
+        return error_response
+    return JsonResponse(response_data)
+
+
+@login_required
+@require_POST
+def ai_api_regenerate(request):
+    """重新生成：删掉最后一条提问 + 回答，用同样的提问再跑一次。"""
+    prepared = _prepare_exchange(request)
+    if isinstance(prepared, JsonResponse):
+        return prepared
+    conversation, quota = prepared
+
+    # 用自增主键排序，避免 created_at 精度相同导致漏删
+    last_user = conversation.messages.filter(role='user').order_by('-pk').first()
+    if last_user is None:
+        return JsonResponse({'ok': False, 'error': '没有可重新生成的提问。'}, status=400)
+
+    # 删掉这条提问之后的所有助手消息（通常只有一条），再删提问本身
+    conversation.messages.filter(role='assistant', pk__gt=last_user.pk).delete()
+    message_text = last_user.content
+    last_user.delete()
+
+    response_data, error_response = _execute_exchange(request, conversation, quota, message_text)
+    if error_response:
+        return error_response
+    response_data['regenerated'] = True
     return JsonResponse(response_data)
 
 
@@ -429,7 +482,7 @@ def ai_api_stream(request):
     history = _recent_history(conversation)
     AIMessage.objects.create(conversation=conversation, role='user', content=message_text)
     _touch_conversation(conversation, message_text)
-    context = build_platform_context(request.user)
+    context = _conversation_context(request.user, conversation)
     agent_type = conversation.agent_type
     is_tool_agent = agent_type in TOOL_AGENTS
     user = request.user
@@ -470,7 +523,7 @@ def ai_api_stream(request):
                         tokens = int(payload.get('tokens') or 0)
 
             full = ''.join(parts)
-            AIMessage.objects.create(
+            assistant_msg = AIMessage.objects.create(
                 conversation=conversation,
                 role='assistant',
                 content=full,
@@ -482,7 +535,12 @@ def ai_api_stream(request):
                 quota.total_tokens_used += tokens
                 quota.save(update_fields=['total_tokens_used'])
 
-            done_event = {'type': 'done', 'conversation_id': conversation.pk, 'model': model_name}
+            done_event = {
+                'type': 'done',
+                'conversation_id': conversation.pk,
+                'model': model_name,
+                'message_id': assistant_msg.pk,
+            }
             if draft is not None and draft.status == 'pending':
                 done_event['draft'] = _draft_payload(draft)
             yield _sse(done_event)
@@ -566,3 +624,203 @@ def ai_draft_discard(request, pk):
         return JsonResponse({'ok': True})
     messages.success(request, '草稿已丢弃。')
     return redirect('club:ai-drafts')
+
+
+# ---------------------------------------------------------------------------
+# 草稿编辑（确认发布前做最后修改）
+# ---------------------------------------------------------------------------
+def _draft_initial(draft):
+    payload = draft.payload or {}
+    if draft.kind == 'problem':
+        return {
+            'title': payload.get('title', ''),
+            'content': payload.get('content', ''),
+            'problem_type': payload.get('problem_type', 'single'),
+            'difficulty': payload.get('difficulty', 'easy'),
+            'category': payload.get('category_id'),
+            'answer': payload.get('answer', ''),
+            'explanation': payload.get('explanation', ''),
+        }
+    if draft.kind == 'activity':
+        return {
+            'title': payload.get('title', ''),
+            'content': payload.get('content', ''),
+            'location': payload.get('location', ''),
+            'start_time': payload.get('start_time', ''),
+            'end_time': payload.get('end_time', ''),
+            'signup_deadline': payload.get('signup_deadline', ''),
+            'capacity': payload.get('capacity', 30),
+            'status': payload.get('status', 'draft'),
+        }
+    return {
+        'title': payload.get('title', ''),
+        'content': payload.get('content', ''),
+        'category': payload.get('category', 'general'),
+        'is_pinned': payload.get('is_pinned', False),
+    }
+
+
+def _build_draft_form(draft, data=None):
+    """按草稿类型复用现有 ModelForm（题目/活动）或补的纯 Form（公告）。"""
+    initial = _draft_initial(draft)
+    if draft.kind == 'problem':
+        return ProblemForm(data=data, initial=initial)
+    if draft.kind == 'activity':
+        return ActivityForm(data=data, initial=initial)
+    return AnnouncementDraftForm(data=data, initial=initial)
+
+
+def _payload_from_form(kind, form):
+    """把表单 cleaned_data 转回草稿 payload（与校验器输入结构一致）。"""
+    cleaned = form.cleaned_data
+    if kind == 'problem':
+        category = cleaned['category']
+        return {
+            'title': cleaned['title'],
+            'content': cleaned['content'],
+            'problem_type': cleaned['problem_type'],
+            'difficulty': cleaned['difficulty'],
+            'category_id': category.pk,
+            'category_name': category.name,
+            'answer': cleaned.get('answer') or '',
+            'explanation': cleaned.get('explanation') or '',
+        }
+    if kind == 'activity':
+        return {
+            'title': cleaned['title'],
+            'content': cleaned['content'],
+            'location': cleaned.get('location') or '',
+            'start_time': timezone.localtime(cleaned['start_time']).strftime('%Y-%m-%dT%H:%M'),
+            'end_time': timezone.localtime(cleaned['end_time']).strftime('%Y-%m-%dT%H:%M'),
+            'signup_deadline': timezone.localtime(cleaned['signup_deadline']).strftime('%Y-%m-%dT%H:%M'),
+            'capacity': cleaned['capacity'],
+            'status': cleaned['status'],
+        }
+    return {
+        'title': cleaned['title'],
+        'content': cleaned['content'],
+        'category': cleaned['category'],
+        'is_pinned': bool(cleaned.get('is_pinned')),
+    }
+
+
+@login_required
+def ai_draft_edit(request, pk):
+    """编辑待确认草稿；保存后仍然是草稿，需要再点一次「确认发布」。"""
+    draft = get_object_or_404(AIDraft, pk=pk, user=request.user)
+    if draft.status != 'pending':
+        messages.error(request, '只有待确认的草稿可以编辑。')
+        return redirect('club:ai-drafts')
+
+    form = _build_draft_form(draft, request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        payload = _payload_from_form(draft.kind, form)
+        try:
+            cleaned = VALIDATORS[draft.kind](payload)
+        except DraftError as exc:
+            form.add_error(None, str(exc))
+        else:
+            draft.payload = cleaned
+            draft.save(update_fields=['payload', 'updated_at'])
+            messages.success(request, '草稿已更新，确认无误后再点「确认发布」。')
+            return redirect('club:ai-drafts')
+
+    return render(request, 'club/ai_draft_edit.html', {
+        'draft': draft,
+        'form': form,
+    })
+
+
+# ---------------------------------------------------------------------------
+# 从详情页带入上下文（题目 / 资料）
+# ---------------------------------------------------------------------------
+@login_required
+@require_POST
+def ai_explain(request, kind, pk):
+    """在题目/资料详情页点「AI 讲解」，带着内容建一个专属会话。"""
+    if kind == 'problem':
+        problem = get_object_or_404(Problem, pk=pk, is_published=True)
+        agent_type = 'problem_tutor'
+        label = f'题目：{problem.title}'
+        parts = [
+            f'【当前题目】《{problem.title}》',
+            '题型：{}｜难度：{}｜模块：{}'.format(
+                problem.get_problem_type_display(),
+                problem.get_difficulty_display(),
+                problem.category.name if problem.category else '未分类',
+            ),
+            f'题干：\n{problem.content}',
+        ]
+        options = list(problem.options.all())
+        if options:
+            parts.append('选项：\n' + '\n'.join(f'{o.label}. {o.content}' for o in options))
+        if problem.answer:
+            parts.append(f'参考答案（用于判断对错，不要直接念给用户）：{problem.answer}')
+        if problem.explanation:
+            parts.append(f'参考解析：{problem.explanation}')
+        parts.append('辅导要求：先给一级提示，不要直接给答案；用户说「再提示」再给二级；明确要答案时才给完整解法。')
+        prompt = '请先给我一点提示，不要直接给答案。'
+    elif kind == 'resource':
+        resource = get_object_or_404(Resource, pk=pk)
+        agent_type = 'study_coach'
+        label = f'资料：{resource.title}'
+        parts = [
+            f'【当前资料】《{resource.title}》',
+            f'分类：{resource.category.name if resource.category else "未分类"}',
+            f'简介：{resource.description or "无"}',
+        ]
+        body = (resource.content or '')[:3000]
+        if body:
+            parts.append(f'正文节选：\n{body}')
+        parts.append('请围绕这份资料回答，不要泛泛而谈。')
+        prompt = '请用三句话总结这份资料，并告诉我先看哪一部分。'
+    else:
+        raise Http404()
+
+    ok, reason, quota = _enforce_ai_quota(request.user)
+    if not ok:
+        messages.error(request, reason)
+        return redirect('club:ai-chat')
+
+    conversation = AIConversation.objects.create(
+        user=request.user,
+        agent_type=agent_type,
+        title=label[:30],
+        context_label=label[:200],
+        context_note='\n'.join(parts),
+    )
+    if quota:
+        quota.total_conversations += 1
+        quota.save(update_fields=['total_conversations'])
+
+    url = reverse('club:ai-chat-id', kwargs={'conversation_id': conversation.pk})
+    return redirect(f'{url}?{urlencode({"q": prompt})}')
+
+
+# ---------------------------------------------------------------------------
+# 会话重命名 / 消息反馈
+# ---------------------------------------------------------------------------
+@login_required
+@require_POST
+def ai_conversation_rename(request, pk):
+    """重命名会话（侧边栏点 ✎ 触发）。"""
+    conversation = get_object_or_404(AIConversation, pk=pk, user=request.user)
+    title = request.POST.get('title', '').strip()[:200]
+    if not title:
+        return JsonResponse({'ok': False, 'error': '标题不能为空。'}, status=400)
+    conversation.title = title
+    conversation.save(update_fields=['title', 'updated_at'])
+    return JsonResponse({'ok': True, 'title': title})
+
+
+@login_required
+@require_POST
+def ai_message_feedback(request, pk):
+    """👍 / 👎：同值再点一次取消。"""
+    message = get_object_or_404(AIMessage, pk=pk, conversation__user=request.user)
+    value = request.POST.get('value', '')
+    if value not in ('up', 'down', ''):
+        return JsonResponse({'ok': False, 'error': '参数不合法。'}, status=400)
+    message.feedback = '' if message.feedback == value else value
+    message.save(update_fields=['feedback', 'updated_at'])
+    return JsonResponse({'ok': True, 'feedback': message.feedback})

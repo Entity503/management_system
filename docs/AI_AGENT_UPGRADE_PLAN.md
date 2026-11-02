@@ -408,3 +408,39 @@ python manage.py migrate     # 新增 0013（加一列）
 
 > 如果线上用 PythonAnywhere，WSGI 默认支持流式；若发现一次性输出，检查反代是否缓冲，
 > 代码里已设置 `X-Accel-Buffering: no`，前端也会自动回退到非流式接口。
+
+---
+
+## 十三、智能体体验增强（L1 / L2 / L3 实施记录）
+
+### 已完成
+
+| 层级 | 内容 | 主要文件 |
+|------|------|----------|
+| L1 | 题目详情页「AI 讲讲这题」：题干 / 选项 / 参考答案注入会话 | `club/views/ai.py`（`ai_explain`） |
+| L1 | 资料详情页「问 AI 这份资料」：正文节选注入会话 | 同上 |
+| L2 | 草稿编辑后发布：题目/活动复用 ModelForm，公告补纯 Form | `club/views/ai.py`、`club/forms/ai.py` |
+| L2 | 重新生成：删掉最后一问一答后重跑（按主键排序，避免同毫秒漏删） | `club/views/ai.py`（`ai_api_regenerate`） |
+| L2 | 会话重命名 | `ai_conversation_rename` |
+| L3 | 模型输出 DOMPurify 消毒 | `templates/club/ai_chat.html` |
+| L3 | 按智能体配置温度 | `club/agents.py`（`temperature` + `agent_temperature`） |
+| L3 | 👍/👎 反馈存 `AIMessage.feedback` | 模型 + `ai_message_feedback` |
+
+### 数据模型变更（迁移 0014）
+
+- `AIConversation.context_label` / `context_note`：详情页带入的上下文
+- `AIMessage.feedback`：`up` / `down` / 空
+
+### 验证
+
+- `python manage.py check` → 0 issues
+- `python manage.py test club.tests` → **74 passed**
+- 真实 MySQL 渲染验证：带上下文的会话页 200，三类草稿编辑页 200
+
+### 注意事项
+
+1. **DOMPurify 走 CDN**（jsdelivr）。如果浏览器加载不到，消毒会退化为不处理；
+   内网环境建议把 `purify.min.js` 下载到 `static/js/` 自托管。
+2. **草稿编辑不处理文件字段**：活动封面、资料文件不参与草稿编辑。
+3. **反馈只落库、暂未消费**：后续可做统计或自动挑选低分回答做 prompt 优化。
+4. 重新生成会**消耗一次请求额度**（因为确实又调了一次模型）。

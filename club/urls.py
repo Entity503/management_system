@@ -68,8 +68,14 @@ urlpatterns = [
     path('ai/<int:conversation_id>/', views.ai_chat, name='ai-chat-id'),
     path('ai/new/', views.ai_conversation_new, name='ai-new'),
     path('ai/<int:pk>/delete/', views.ai_conversation_delete, name='ai-delete'),
+    path('ai/<int:pk>/rename/', views.ai_conversation_rename, name='ai-rename'),
     path('ai/api/send/', views.ai_api_send, name='ai-api-send'),
     path('ai/api/stream/', views.ai_api_stream, name='ai-api-stream'),
+    path('ai/api/regenerate/', views.ai_api_regenerate, name='ai-api-regenerate'),
+    path('ai/messages/<int:pk>/feedback/', views.ai_message_feedback, name='ai-message-feedback'),
+
+    # 从题目 / 资料详情页带入上下文
+    path('ai/explain/<str:kind>/<int:pk>/', views.ai_explain, name='ai-explain'),
 
     # ------------------------------------------------------------------
     # AI 草稿箱（所有发布都必须由当前登录用户自己确认）
@@ -77,6 +83,7 @@ urlpatterns = [
     path('ai/drafts/', views.ai_drafts, name='ai-drafts'),
     path('ai/drafts/<int:pk>/apply/', views.ai_draft_apply, name='ai-draft-apply'),
     path('ai/drafts/<int:pk>/discard/', views.ai_draft_discard, name='ai-draft-discard'),
+    path('ai/drafts/<int:pk>/edit/', views.ai_draft_edit, name='ai-draft-edit'),
 
     # ------------------------------------------------------------------
     # 公告

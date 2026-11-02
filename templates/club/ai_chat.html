@@ -324,6 +324,7 @@
         <div class="conv-item {% if current_conversation and conv.pk == current_conversation.pk %}active{% endif %}">
             <span class="conv-title" onclick="location.href='{% url 'club:ai-chat-id' conv.pk %}'">{{ conv.title|default:'未命名会话' }}</span>
             <span class="conv-agent" onclick="location.href='{% url 'club:ai-chat-id' conv.pk %}'">{{ conv.get_agent_type_display }}</span>
+            <button type="button" class="conv-rename" data-id="{{ conv.pk }}" data-title="{{ conv.title|default:'未命名会话' }}" title="重命名">✎</button>
             <form method="post" action="{% url 'club:ai-delete' conv.pk %}" style="display:inline" onsubmit="return confirm('删除此会话？')">
                 {% csrf_token %}
                 <button type="submit" class="conv-del" title="删除" onclick="event.stopPropagation()">✕</button>
@@ -338,7 +339,12 @@
 <section class="chat-main">
     {% if current_conversation %}
     <div class="chat-header">
-        <h2>{{ current_conversation.title|default:'新会话' }}</h2>
+        <div style="min-width:0;">
+            <h2>{{ current_conversation.title|default:'新会话' }}</h2>
+            {% if current_conversation.context_label %}
+            <div class="chat-context">📎 {{ current_conversation.context_label }}</div>
+            {% endif %}
+        </div>
         <span class="agent-tag">{{ current_conversation.get_agent_type_display }}</span>
     </div>
     <div class="chat-messages" id="chat-messages">
@@ -358,6 +364,12 @@
                     {% endfor %}
                 </div>
                 {% endif %}
+                {% if msg.role == 'assistant' %}
+                <div class="msg-feedback" data-id="{{ msg.pk }}">
+                    <button type="button" class="fb-btn{% if msg.feedback == 'up' %} active{% endif %}" data-value="up" title="有用">👍</button>
+                    <button type="button" class="fb-btn{% if msg.feedback == 'down' %} active{% endif %}" data-value="down" title="没用">👎</button>
+                </div>
+                {% endif %}
             </div>
         </div>
         {% empty %}
@@ -373,7 +385,10 @@
             <textarea id="chat-input" placeholder="输入消息，Ctrl+Enter 发送..." rows="2">{{ prefill }}</textarea>
             <div class="chat-input-row">
                 <small>Ctrl+Enter 发送</small>
-                <button type="submit" id="send-btn">发送</button>
+                <div class="chat-input-actions">
+                    <button type="button" id="regen-btn" class="regen-btn" title="用上一条提问重新生成">↻ 重新生成</button>
+                    <button type="submit" id="send-btn">发送</button>
+                </div>
             </div>
         </form>
     </div>
@@ -401,12 +416,21 @@
 {% endblock %}
 {% block extra_js %}
 <script src="{% static 'highlight/highlight.min.js' %}"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.11/dist/purify.min.js"></script>
 <script>
 marked.setOptions({ breaks: true, gfm: true });
 
+/* 所有模型输出都要先消毒：防止提示词注入把 <script> 带进页面 */
+function sanitizeHtml(html) {
+    if (window.DOMPurify) {
+        return window.DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+    }
+    return html;
+}
+
 function renderMsg(el) {
     var html = marked.parse(el.textContent);
-    el.innerHTML = html;
+    el.innerHTML = sanitizeHtml(html);
     el.querySelectorAll('pre code').forEach(function(block) { hljs.highlightElement(block); });
 }
 
@@ -501,6 +525,103 @@ document.querySelectorAll('.agent-card').forEach(function (card) {
     });
 });
 
+/* 会话重命名 */
+document.querySelectorAll('.conv-rename').forEach(function (btn) {
+    btn.addEventListener('click', async function (event) {
+        event.stopPropagation();
+        var next = window.prompt('重命名会话', btn.dataset.title || '');
+        if (!next || !next.trim()) return;
+        var fd = new FormData();
+        fd.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+        fd.append('title', next.trim());
+        try {
+            var resp = await fetch("{% url 'club:ai-rename' 0 %}".replace('/0/', '/' + btn.dataset.id + '/'), {
+                method: 'POST', body: fd, credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            var data = await resp.json();
+            if (!data.ok) throw new Error(data.error || '重命名失败');
+            var item = btn.closest('.conv-item');
+            var titleEl = item ? item.querySelector('.conv-title') : null;
+            if (titleEl) titleEl.textContent = data.title;
+            btn.dataset.title = data.title;
+        } catch (err) {
+            alert(err.message || '重命名失败');
+        }
+    });
+});
+
+/* 消息反馈 👍/👎 */
+function bindFeedback(box) {
+    box.addEventListener('click', async function (event) {
+        var btn = event.target.closest('.fb-btn');
+        if (!btn) return;
+        var fd = new FormData();
+        fd.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+        fd.append('value', btn.dataset.value);
+        try {
+            var resp = await fetch("{% url 'club:ai-message-feedback' 0 %}".replace('/0/', '/' + box.dataset.id + '/'), {
+                method: 'POST', body: fd, credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            var data = await resp.json();
+            if (!data.ok) throw new Error(data.error || '提交失败');
+            box.querySelectorAll('.fb-btn').forEach(function (item) { item.classList.remove('active'); });
+            if (data.feedback) {
+                var active = box.querySelector('.fb-btn[data-value="' + data.feedback + '"]');
+                if (active) active.classList.add('active');
+            }
+        } catch (err) {
+            alert(err.message || '提交失败');
+        }
+    });
+}
+document.querySelectorAll('.msg-feedback').forEach(bindFeedback);
+
+function addFeedbackBox(aiDiv, messageId) {
+    var body = aiDiv.querySelector('.msg-body');
+    if (!body || !messageId) return;
+    var box = document.createElement('div');
+    box.className = 'msg-feedback';
+    box.dataset.id = messageId;
+    ['up', 'down'].forEach(function (value) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'fb-btn';
+        button.dataset.value = value;
+        button.textContent = value === 'up' ? '👍' : '👎';
+        box.appendChild(button);
+    });
+    bindFeedback(box);
+    body.appendChild(box);
+}
+
+/* 重新生成 */
+var regenBtn = document.getElementById('regen-btn');
+if (regenBtn) {
+    regenBtn.addEventListener('click', async function () {
+        if (!confirm('用上一条提问重新生成？当前这条回答会被替换。')) return;
+        regenBtn.disabled = true;
+        regenBtn.textContent = '重新生成中…';
+        var fd = new FormData();
+        fd.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+        fd.append('conversation_id', {{ current_conversation.pk|default:'null' }});
+        try {
+            var resp = await fetch("{% url 'club:ai-api-regenerate' %}", {
+                method: 'POST', body: fd, credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            var data = await resp.json();
+            if (!data.ok) throw new Error(data.error || '重新生成失败');
+            location.reload();
+        } catch (err) {
+            regenBtn.disabled = false;
+            regenBtn.textContent = '↻ 重新生成';
+            alert(err.message || '重新生成失败');
+        }
+    });
+}
+
 var container = document.getElementById('chat-messages');
 if (container) container.scrollTop = container.scrollHeight;
 
@@ -578,6 +699,7 @@ async function readStream(response, aiDiv, onFirstEvent) {
             } else if (event.type === 'done') {
                 doneEvent = event;
                 if (event.draft) appendDraftCard(event.draft);
+                if (event.message_id) addFeedbackBox(aiDiv, event.message_id);
             } else if (event.type === 'error') {
                 text += (text ? '\n\n' : '') + '❌ ' + event.error;
                 contentEl.textContent = text;
@@ -656,6 +778,7 @@ if (form) {
                     renderMsg(contentEl);
                     renderToolList(aiDiv.querySelector('.msg-tools'), data.tools);
                     if (data.draft) appendDraftCard(data.draft);
+                    if (data.message_id) addFeedbackBox(aiDiv, data.message_id);
                     updateChatUrl(data.conversation_id);
                 } else {
                     contentEl.textContent = '❌ ' + (data.error || '请求失败');

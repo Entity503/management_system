@@ -16,7 +16,12 @@ import os
 
 import requests
 
-from .agents import AGENT_LABELS, AGENT_PROMPTS, DEFAULT_AGENT  # noqa: F401  re-export 兼容旧引用
+from .agents import (  # noqa: F401  re-export 兼容旧引用
+    AGENT_LABELS,
+    AGENT_PROMPTS,
+    DEFAULT_AGENT,
+    agent_temperature,
+)
 
 DEFAULT_TIMEOUT = 60
 DEFAULT_MODEL = 'deepseek-chat'
@@ -170,10 +175,10 @@ def chat(agent_type, history, user_message, context=None):
     """
     AI 对话入口（单轮，无工具）。
 
-    返回统一格式字典；全部 Provider 失败时抛 RuntimeError。
+    温度按智能体配置：代码评审 0.2、面试 0.4、教练 0.7。
     """
     messages = build_messages(agent_type, history, user_message, context=context)
-    return chat_messages(messages)
+    return chat_messages(messages, temperature=agent_temperature(agent_type))
 
 
 # ---------------------------------------------------------------------------

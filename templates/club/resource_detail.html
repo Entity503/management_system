@@ -15,8 +15,12 @@
     {% else %}
     <p class="empty">该资料暂无详细内容。</p>
     {% endif %}
-    <div style="margin-top: 48px; display: flex; gap: 16px;">
+    <div style="margin-top: 48px; display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
         {% if resource.file %}<a class="button" href="{% url 'club:resource-download' resource.pk %}">下载文件 <span>↓</span></a>{% endif %}
+        <form method="post" action="{% url 'club:ai-explain' 'resource' resource.pk %}" style="display:inline;margin:0;">
+            {% csrf_token %}
+            <button type="submit" class="button" style="background:transparent;color:var(--coral);border:1px solid var(--coral);cursor:pointer;font-family:inherit;">🤖 问 AI 这份资料</button>
+        </form>
         <a class="button" style="background: transparent; color: var(--ink); border: 1px solid var(--ink);" href="{% url 'club:resources' %}">返回列表 <span>←</span></a>
         {% if user.is_authenticated and user.is_staff or user.is_authenticated and user == resource.uploader %}
         <a class="button" style="background: #e74c3c;" href="{% url 'club:resource-delete' resource.pk %}">删除资料</a>

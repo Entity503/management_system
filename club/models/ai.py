@@ -25,6 +25,8 @@ class AIConversation(TimeStampedModel):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='ai_conversations')
     title = models.CharField('会话标题', max_length=200, blank=True, help_text='首次对话后自动填充')
     agent_type = models.CharField('智能体类型', max_length=30, choices=AGENT_CHOICES, default='club_assistant')
+    context_label = models.CharField('上下文标签', max_length=200, blank=True, help_text='如「题目：TCP 三次握手」')
+    context_note = models.TextField('上下文内容', blank=True, help_text='从详情页带入的题目/资料内容，注入 System Prompt')
 
     class Meta:
         ordering = ['-updated_at']
@@ -52,6 +54,8 @@ class AIMessage(TimeStampedModel):
         '工具调用轨迹', default=list, blank=True,
         help_text='[{"name","label","ok","summary"}]，用于刷新后仍能看到 AI 调用了哪些工具',
     )
+    FEEDBACK_CHOICES = [('up', '有用'), ('down', '没用')]
+    feedback = models.CharField('用户反馈', max_length=10, choices=FEEDBACK_CHOICES, blank=True)
 
     class Meta:
         ordering = ['created_at']

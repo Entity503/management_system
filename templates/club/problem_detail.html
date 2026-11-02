@@ -62,8 +62,12 @@
         <small>by {{ problem.created_by.profile.nickname|default:problem.created_by.username }}</small>
     </div>
 
-    <div style="display:flex;gap:10px;margin-bottom:16px;">
+    <div style="display:flex;gap:10px;margin-bottom:16px;align-items:center;flex-wrap:wrap;">
         <a href="{% url 'club:practice' %}" style="color:var(--coral);font-size:14px;">← 返回刷题列表</a>
+        <form method="post" action="{% url 'club:ai-explain' 'problem' problem.pk %}" style="display:inline;margin:0;">
+            {% csrf_token %}
+            <button type="submit" style="background:transparent;border:1px solid var(--coral);color:var(--coral);border-radius:8px;padding:4px 12px;font-size:13px;cursor:pointer;font-family:inherit;">🤖 让 AI 讲讲这题</button>
+        </form>
         {% if user.is_authenticated and user.is_staff or user.is_authenticated and user == problem.created_by %}
         <span style="color:var(--muted);">|</span>
         <a href="{% url 'club:problem-edit' problem.pk %}" style="color:var(--coral);font-size:14px;">编辑题目</a>

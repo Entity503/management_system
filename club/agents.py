@@ -16,6 +16,7 @@ AGENT_REGISTRY = {
     'club_assistant': {
         'label': '社团助手',
         'description': '介绍功能、活动与资料，告诉你先去哪儿看',
+        'temperature': 0.7,
         'examples': [
             '这个网站都有什么功能？',
             '最近有什么公告和活动？',
@@ -34,6 +35,7 @@ AGENT_REGISTRY = {
     'study_coach': {
         'label': '学习教练',
         'description': '按年级和专业定制学习路线与每周计划',
+        'temperature': 0.7,
         'examples': [
             '我是大二软件工程，帮我排半年的学习路线',
             '数据结构和操作系统先学哪个？',
@@ -53,6 +55,7 @@ AGENT_REGISTRY = {
     'problem_tutor': {
         'label': '题目答疑',
         'description': '讲思路、算复杂度，先提示后给解法',
+        'temperature': 0.5,
         'examples': [
             '快速排序的平均复杂度为什么是 O(n log n)？',
             '讲讲 TCP 三次握手每一步为什么必要',
@@ -72,6 +75,7 @@ AGENT_REGISTRY = {
     'code_review': {
         'label': '代码评审',
         'description': '查 bug、评复杂度、给修复后的代码',
+        'temperature': 0.2,
         'examples': [
             '帮我看看这段 Python 有没有问题：…',
             '这段 C 代码的内存管理有隐患吗？',
@@ -92,6 +96,7 @@ AGENT_REGISTRY = {
     'interview': {
         'label': '面试模拟',
         'description': '算法 + 八股 + 项目深挖，逐题打分',
+        'temperature': 0.4,
         'examples': [
             '开始一场后端的算法面试，中等难度',
             '问我五道操作系统的八股题',
@@ -112,6 +117,7 @@ AGENT_REGISTRY = {
     'ops_assistant': {
         'label': '运营助手',
         'description': '查真实数据、一句话生成题目/公告/活动草稿，确认后发布',
+        'temperature': 0.3,
         'examples': [
             '这周有什么活动？顺便帮我发个提醒公告',
             '帮我出一道计算机网络的选择题，中等难度，考 TCP 三次握手，带解析',
@@ -154,6 +160,12 @@ AGENT_LABELS = {key: item['label'] for key, item in AGENT_REGISTRY.items()}
 AGENT_PROMPTS = {key: item['prompt'] for key, item in AGENT_REGISTRY.items()}
 AGENT_DESCRIPTIONS = {key: item['description'] for key, item in AGENT_REGISTRY.items()}
 AGENT_EXAMPLES = {key: item['examples'] for key, item in AGENT_REGISTRY.items()}
+AGENT_TEMPERATURES = {key: item.get('temperature', 0.7) for key, item in AGENT_REGISTRY.items()}
+
+
+def agent_temperature(agent_type):
+    """不同智能体用不同温度：评审更确定、教练更发散。"""
+    return AGENT_TEMPERATURES.get(agent_type, 0.7)
 
 # 模型层 choices 直接由注册表派生，避免两处维护
 AGENT_CHOICES = [(key, item['label']) for key, item in AGENT_REGISTRY.items()]

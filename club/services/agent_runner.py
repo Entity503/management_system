@@ -10,6 +10,7 @@
 """
 
 from .. import ai_service
+from ..agents import agent_temperature
 from .ai_tools import TOOL_LABELS, TOOL_SCHEMAS, execute_tool
 
 MAX_TOOL_ROUNDS = 3
@@ -25,13 +26,14 @@ def run_with_tools(agent_type, history, user_message, context, user):
     - draft：本轮生成的最后一个草稿对象（没有则 None）
     """
     messages = ai_service.build_messages(agent_type, history, user_message, context=context)
+    temperature = agent_temperature(agent_type)
     trace = []
     draft = None
     model_name = ''
     tokens = 0
 
     for round_index in range(MAX_TOOL_ROUNDS):
-        result = ai_service.chat_messages(messages, tools=TOOL_SCHEMAS)
+        result = ai_service.chat_messages(messages, tools=TOOL_SCHEMAS, temperature=temperature)
         model_name = result.get('model') or model_name
         tokens += int(result.get('tokens') or 0)
 
@@ -72,7 +74,7 @@ def run_with_tools(agent_type, history, user_message, context, user):
                 draft = outcome['draft']
 
     # 轮次用尽：不再给工具，强制模型用文本收尾
-    result = ai_service.chat_messages(messages)
+    result = ai_service.chat_messages(messages, temperature=temperature)
     model_name = result.get('model') or model_name
     tokens += int(result.get('tokens') or 0)
     return {

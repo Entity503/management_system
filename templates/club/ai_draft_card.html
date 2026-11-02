@@ -17,5 +17,6 @@
     <footer class="draft-actions">
         <button type="button" class="draft-btn draft-apply" data-id="{{ draft.pk }}">确认发布</button>
         <button type="button" class="draft-btn draft-discard" data-id="{{ draft.pk }}">丢弃</button>
+        <a class="draft-link" href="{% url 'club:ai-draft-edit' draft.pk %}">编辑</a>
     </footer>
 </article>

@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}编辑{{ draft.get_kind_display }}草稿 - 计算机俱乐部{% endblock %}
+{% block content %}
+<section class="content-page">
+    <p class="eyebrow">EDIT DRAFT</p>
+    <h1>编辑{{ draft.get_kind_display }}草稿</h1>
+    <p class="meta">
+        保存后它仍然是草稿，需要回到
+        <a href="{% url 'club:ai-drafts' %}" style="color:var(--coral)">草稿箱</a>
+        再点一次「确认发布」才会真正写入系统。
+    </p>
+
+    <form method="post" class="auth-form" novalidate>
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="form-error">{{ form.non_field_errors }}</div>{% endif %}
+
+        {% for field in form %}
+            <label>
+                {{ field.label }}
+                {{ field }}
+                {% for error in field.errors %}<small class="form-error">{{ error }}</small>{% endfor %}
+            </label>
+        {% endfor %}
+
+        <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;">
+            <button class="button" type="submit">保存草稿 <span>→</span></button>
+            <a class="button" style="background:transparent;color:var(--ink);border:1px solid var(--ink);" href="{% url 'club:ai-drafts' %}">取消</a>
+        </div>
+    </form>
+</section>
+{% endblock %}
