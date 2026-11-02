@@ -9,6 +9,7 @@ AIQuota：每用户一条配额记录，管理员后台可调。
 from django.contrib.auth.models import User
 from django.db import models
 
+from ..agents import AGENT_CHOICES
 from .base import TimeStampedModel
 
 
@@ -16,14 +17,11 @@ class AIConversation(TimeStampedModel):
     """
     AI 会话。每个会话绑定一个用户和一个智能体角色，
     消息通过 AIMessage 反向关联。
+
+    AGENT_CHOICES 由 club.agents.AGENT_REGISTRY 派生（单一数据源），
+    新增智能体只需改注册表 + 生成迁移。
     """
-    AGENT_CHOICES = [
-        ('club_assistant', '社团助手'),
-        ('study_coach', '学习教练'),
-        ('problem_tutor', '题目答疑'),
-        ('code_review', '代码评审'),
-        ('interview', '面试模拟'),
-    ]
+    AGENT_CHOICES = AGENT_CHOICES
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='ai_conversations')
     title = models.CharField('会话标题', max_length=200, blank=True, help_text='首次对话后自动填充')
     agent_type = models.CharField('智能体类型', max_length=30, choices=AGENT_CHOICES, default='club_assistant')
@@ -50,6 +48,10 @@ class AIMessage(TimeStampedModel):
     content = models.TextField('内容')
     model = models.CharField('模型', max_length=100, blank=True, help_text='如 deepseek-chat / qwen-plus')
     tokens = models.PositiveIntegerField('Token 数', default=0)
+    tool_calls = models.JSONField(
+        '工具调用轨迹', default=list, blank=True,
+        help_text='[{"name","label","ok","summary"}]，用于刷新后仍能看到 AI 调用了哪些工具',
+    )
 
     class Meta:
         ordering = ['created_at']

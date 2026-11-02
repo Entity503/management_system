@@ -1,5 +1,5 @@
 """
-Django settings for management_system project.
+management_system 项目的 Django 配置。
 
 本地开发：复制 .env.example 为 .env，填好密钥；DJANGO_DEBUG=True 可走 SQLite 回退。
 生产部署（Render / Railway）：
@@ -36,7 +36,7 @@ CSRF_TRUSTED_ORIGINS = [
 SUPER_ADMIN_EMAIL = os.getenv('SUPER_ADMIN_EMAIL', '')
 
 
-# Application definition
+# 应用配置
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -79,7 +79,7 @@ TEMPLATES = [
 WSGI_APPLICATION = 'management_system.wsgi.application'
 
 
-# Database
+# 数据库
 # --------
 # 优先级：DATABASE_URL（Render 会自动注入 PostgreSQL）
 #       > MYSQL_DATABASE（自己配的 MySQL）
@@ -104,7 +104,7 @@ else:
     }
 
 
-# Password validation
+# 密码校验
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
@@ -114,7 +114,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
-# Internationalization
+# 国际化
 
 LANGUAGE_CODE = 'zh-hans'
 TIME_ZONE = 'Asia/Shanghai'
@@ -122,7 +122,7 @@ USE_I18N = True
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
+# 静态文件（CSS、JavaScript、图片）
 # WhiteNoise 自动收集 + 压缩 + 服务静态文件，无需手动 collectstatic。
 
 STATIC_URL = 'static/'
@@ -139,7 +139,7 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = RESOURCE_MAX_FILE_SIZE + 10 * 1024 * 1024
 
 
-# Email
+# 邮件配置
 # 优先级：Resend HTTP API（适合 PythonAnywhere 免费环境）
 #       > QQ SMTP（本地或允许 SMTP 出站的生产环境）
 #       > PlainConsoleBackend（仅开发调试）

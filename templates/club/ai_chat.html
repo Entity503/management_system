@@ -306,13 +306,17 @@
         <p class="sub">AI AGENTS</p>
         <h3>智能体列表</h3>
     </div>
-    <form method="post" action="{% url 'club:ai-new' %}" class="new-chat-form">
+    <a class="drafts-link" href="{% url 'club:ai-drafts' %}">
+        <span>📋 草稿箱</span><b>{{ pending_draft_count }}</b>
+    </a>
+    <form method="post" action="{% url 'club:ai-new' %}" class="new-chat-form" id="new-chat-form">
         {% csrf_token %}
-        <select name="agent_type">
+        <select name="agent_type" id="agent-select">
             {% for key, label in agent_labels.items %}
             <option value="{{ key }}">{{ label }}</option>
             {% endfor %}
         </select>
+        <input type="hidden" name="first_message" id="first-message" value="">
         <button type="submit">+ 新建会话</button>
     </form>
     <div class="conv-list">
@@ -338,12 +342,22 @@
         <span class="agent-tag">{{ current_conversation.get_agent_type_display }}</span>
     </div>
     <div class="chat-messages" id="chat-messages">
+        <div class="draft-strip" id="draft-strip">
+            {% for draft in pending_drafts %}{% include 'club/ai_draft_card.html' with draft=draft %}{% endfor %}
+        </div>
         {% for msg in messages_list %}
         <div class="msg {% if msg.role == 'user' %}msg-user{% else %}msg-assistant{% endif %}">
             <div class="msg-avatar">{% if msg.role == 'user' %}我{% else %}AI{% endif %}</div>
             <div class="msg-body">
                 <div class="msg-role">{% if msg.role == 'user' %}你{% else %}{{ current_conversation.get_agent_type_display }}{% endif %}{% if msg.model %} · {{ msg.model }}{% endif %}</div>
                 <div class="msg-content">{{ msg.content }}</div>
+                {% if msg.tool_calls %}
+                <div class="msg-tools">
+                    {% for tool in msg.tool_calls %}
+                    <span class="tool-chip{% if not tool.ok %} is-fail{% endif %}">{{ tool.label }}{% if tool.summary %} · {{ tool.summary|truncatechars:36 }}{% endif %}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
         </div>
         {% empty %}
@@ -356,7 +370,7 @@
     <div class="chat-input">
         <form id="chat-form">
             {% csrf_token %}
-            <textarea id="chat-input" placeholder="输入消息，Ctrl+Enter 发送..." rows="2"></textarea>
+            <textarea id="chat-input" placeholder="输入消息，Ctrl+Enter 发送..." rows="2">{{ prefill }}</textarea>
             <div class="chat-input-row">
                 <small>Ctrl+Enter 发送</small>
                 <button type="submit" id="send-btn">发送</button>
@@ -370,8 +384,15 @@
     <div class="chat-messages">
         <div class="chat-empty">
             <h2>🤖 AI 智能体</h2>
-            <p>在左侧选择一个智能体，然后点「+ 新建会话」</p>
-            <p style="margin-top:18px">社团助手 · 学习教练 · 题目答疑 · 代码评审 · 面试模拟</p>
+            <p>选一个智能体，点下面的示例即可新建一个带问题的会话</p>
+        </div>
+        <div class="agent-grid">
+            {% for agent in agents %}
+            <button type="button" class="agent-card" data-agent="{{ agent.key }}" data-prompt="{{ agent.examples.0 }}">
+                <strong>{{ agent.label }}</strong>
+                <span>{{ agent.description }}</span>
+            </button>
+            {% endfor %}
         </div>
     </div>
     {% endif %}
@@ -389,7 +410,96 @@ function renderMsg(el) {
     el.querySelectorAll('pre code').forEach(function(block) { hljs.highlightElement(block); });
 }
 
+/* 侧边栏草稿数量徽标 */
+function bumpDraftCount(delta) {
+    var badge = document.querySelector('.drafts-link b');
+    if (!badge) return;
+    var current = parseInt(badge.textContent, 10);
+    if (isNaN(current)) current = 0;
+    badge.textContent = Math.max(0, current + delta);
+}
+
+/* 新建草稿卡片：用 DOM API 构建，避免把模型输出当 HTML 插入 */
+function appendDraftCard(draft) {
+    var strip = document.getElementById('draft-strip');
+    if (!strip || !draft) return;
+
+    var card = document.createElement('article');
+    card.className = 'draft-card';
+    card.dataset.draftId = draft.id;
+
+    var head = document.createElement('header');
+    head.className = 'draft-card-head';
+    var kind = document.createElement('span');
+    kind.className = 'draft-kind';
+    kind.textContent = draft.kind_label || '草稿';
+    var status = document.createElement('span');
+    status.className = 'draft-status';
+    status.textContent = '待确认';
+    head.appendChild(kind);
+    head.appendChild(status);
+
+    var title = document.createElement('h3');
+    title.className = 'draft-title';
+    title.textContent = draft.title || '未命名草稿';
+
+    var fields = document.createElement('dl');
+    fields.className = 'draft-fields';
+    (draft.fields || []).forEach(function (pair) {
+        if (pair[0] === '标题') return;
+        var row = document.createElement('div');
+        row.className = 'draft-field';
+        var dt = document.createElement('dt');
+        dt.textContent = pair[0];
+        var dd = document.createElement('dd');
+        dd.textContent = pair[1];
+        row.appendChild(dt);
+        row.appendChild(dd);
+        fields.appendChild(row);
+    });
+
+    var actions = document.createElement('footer');
+    actions.className = 'draft-actions';
+    var applyBtn = document.createElement('button');
+    applyBtn.type = 'button';
+    applyBtn.className = 'draft-btn draft-apply';
+    applyBtn.dataset.id = draft.id;
+    applyBtn.textContent = '确认发布';
+    var discardBtn = document.createElement('button');
+    discardBtn.type = 'button';
+    discardBtn.className = 'draft-btn draft-discard';
+    discardBtn.dataset.id = draft.id;
+    discardBtn.textContent = '丢弃';
+    actions.appendChild(applyBtn);
+    actions.appendChild(discardBtn);
+
+    card.appendChild(head);
+    card.appendChild(title);
+    card.appendChild(fields);
+    card.appendChild(actions);
+    strip.prepend(card);
+    bumpDraftCount(1);
+    strip.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+document.addEventListener('draft:resolved', function () {
+    bumpDraftCount(-1);
+});
+
 document.querySelectorAll('.msg-content').forEach(renderMsg);
+
+/* 空会话页：点智能体卡片 = 选好角色 + 带上示例问题，直接新建会话 */
+document.querySelectorAll('.agent-card').forEach(function (card) {
+    card.addEventListener('click', function () {
+        var select = document.getElementById('agent-select');
+        var hidden = document.getElementById('first-message');
+        var form = document.getElementById('new-chat-form');
+        if (!select || !hidden || !form) return;
+        select.value = card.dataset.agent;
+        hidden.value = card.dataset.prompt || '';
+        form.submit();
+    });
+});
 
 var container = document.getElementById('chat-messages');
 if (container) container.scrollTop = container.scrollHeight;
@@ -397,6 +507,91 @@ if (container) container.scrollTop = container.scrollHeight;
 var form = document.getElementById('chat-form');
 var input = document.getElementById('chat-input');
 var sendBtn = document.getElementById('send-btn');
+
+var STREAM_URL = "{% url 'club:ai-api-stream' %}";
+var SEND_URL = "{% url 'club:ai-api-send' %}";
+var CHAT_URL_TPL = "{% url 'club:ai-chat-id' 0 %}";
+
+function makeForm(text, conversationId, agentType, csrf) {
+    var fd = new FormData();
+    fd.append('csrfmiddlewaretoken', csrf);
+    fd.append('conversation_id', conversationId || '');
+    fd.append('agent_type', agentType);
+    fd.append('message', text);
+    return fd;
+}
+
+function updateChatUrl(id) {
+    if (id) history.replaceState(null, '', CHAT_URL_TPL.replace('/0/', '/' + id + '/'));
+}
+
+function addToolChip(box, event) {
+    if (!box) return;
+    var chip = document.createElement('span');
+    chip.className = 'tool-chip' + (event.ok ? '' : ' is-fail');
+    chip.textContent = (event.label || event.name || '工具') + (event.summary ? ' · ' + event.summary : '');
+    box.appendChild(chip);
+}
+
+function renderToolList(box, tools) {
+    (tools || []).forEach(function (tool) { addToolChip(box, tool); });
+}
+
+/* 读取 SSE 流：逐块把文本写进气泡，最后统一渲染 Markdown */
+async function readStream(response, aiDiv, onFirstEvent) {
+    var reader = response.body.getReader();
+    var decoder = new TextDecoder();
+    var buffer = '';
+    var contentEl = aiDiv.querySelector('.msg-content');
+    var toolsEl = aiDiv.querySelector('.msg-tools');
+    var text = '';
+    var count = 0;
+    var doneEvent = null;
+
+    while (true) {
+        var chunk = await reader.read();
+        if (chunk.done) break;
+        buffer += decoder.decode(chunk.value, { stream: true });
+
+        var index;
+        while ((index = buffer.indexOf('\n\n')) >= 0) {
+            var block = buffer.slice(0, index);
+            buffer = buffer.slice(index + 2);
+
+            var dataLine = null;
+            block.split('\n').forEach(function (line) {
+                if (line.indexOf('data: ') === 0) dataLine = line;
+            });
+            if (!dataLine) continue;
+
+            var event;
+            try { event = JSON.parse(dataLine.slice(6)); } catch (err) { continue; }
+
+            count += 1;
+            if (count === 1 && onFirstEvent) onFirstEvent();
+
+            if (event.type === 'delta') {
+                text += event.text;
+                contentEl.textContent = text;
+            } else if (event.type === 'tool') {
+                addToolChip(toolsEl, event);
+            } else if (event.type === 'done') {
+                doneEvent = event;
+                if (event.draft) appendDraftCard(event.draft);
+            } else if (event.type === 'error') {
+                text += (text ? '\n\n' : '') + '❌ ' + event.error;
+                contentEl.textContent = text;
+            }
+        }
+    }
+
+    if (text) {
+        renderMsg(contentEl);
+    } else {
+        contentEl.textContent = '';
+    }
+    return { count: count, done: doneEvent };
+}
 
 if (form) {
     form.addEventListener('submit', async function(e) {
@@ -420,36 +615,58 @@ if (form) {
 
         var aiDiv = document.createElement('div');
         aiDiv.className = 'msg msg-assistant msg-loading';
-        aiDiv.innerHTML = '<div class="msg-avatar">AI</div><div class="msg-body"><div class="msg-role">' + '{{ current_conversation.get_agent_type_display|default:"智能体" }}' + '</div><div class="msg-content">思考中</div></div>';
+        aiDiv.innerHTML = '<div class="msg-avatar">AI</div><div class="msg-body"><div class="msg-role">' + '{{ current_conversation.get_agent_type_display|default:"智能体" }}' + '</div><div class="msg-content">思考中</div><div class="msg-tools"></div></div>';
         container.appendChild(aiDiv);
         container.scrollTop = container.scrollHeight;
 
+        var handled = false;
+
+        /* 1) 优先走 SSE 流式 */
         try {
-            var fd = new FormData();
-            fd.append('csrfmiddlewaretoken', csrf);
-            fd.append('conversation_id', conversationId || '');
-            fd.append('agent_type', agentType);
-            fd.append('message', text);
-
-            var resp = await fetch("{% url 'club:ai-api-send' %}", { method: 'POST', body: fd, credentials: 'same-origin' });
-            var data = await resp.json();
-
-            aiDiv.classList.remove('msg-loading');
-            if (data.ok) {
-                conversationId = data.conversation_id;
-                if (!window.history.state) {
-                    history.pushState(null, '', '/ai/' + conversationId + '/');
+            var streamResp = await fetch(STREAM_URL, {
+                method: 'POST',
+                body: makeForm(text, conversationId, agentType, csrf),
+                credentials: 'same-origin',
+            });
+            if (streamResp.ok && streamResp.body && window.TextDecoder) {
+                var result = await readStream(streamResp, aiDiv, function () { handled = true; });
+                if (result.count > 0) {
+                    handled = true;
+                    aiDiv.classList.remove('msg-loading');
+                    if (result.done) updateChatUrl(result.done.conversation_id);
                 }
-                aiDiv.querySelector('.msg-content').textContent = data.content;
-                renderMsg(aiDiv.querySelector('.msg-content'));
-            } else {
-                aiDiv.querySelector('.msg-content').textContent = '❌ ' + (data.error || '请求失败');
             }
         } catch (err) {
-            aiDiv.classList.remove('msg-loading');
-            aiDiv.querySelector('.msg-content').textContent = '❌ 网络错误：' + err.message;
+            console.warn('流式失败，回退到普通请求', err);
         }
 
+        /* 2) 流式不可用时回退到非流式接口 */
+        if (!handled) {
+            try {
+                var resp = await fetch(SEND_URL, {
+                    method: 'POST',
+                    body: makeForm(text, conversationId, agentType, csrf),
+                    credentials: 'same-origin',
+                });
+                var data = await resp.json();
+                aiDiv.classList.remove('msg-loading');
+                var contentEl = aiDiv.querySelector('.msg-content');
+                if (data.ok) {
+                    contentEl.textContent = data.content;
+                    renderMsg(contentEl);
+                    renderToolList(aiDiv.querySelector('.msg-tools'), data.tools);
+                    if (data.draft) appendDraftCard(data.draft);
+                    updateChatUrl(data.conversation_id);
+                } else {
+                    contentEl.textContent = '❌ ' + (data.error || '请求失败');
+                }
+            } catch (err) {
+                aiDiv.classList.remove('msg-loading');
+                aiDiv.querySelector('.msg-content').textContent = '❌ 网络错误：' + err.message;
+            }
+        }
+
+        aiDiv.classList.remove('msg-loading');
         sendBtn.disabled = false;
         sendBtn.textContent = '发送';
         container.scrollTop = container.scrollHeight;
@@ -464,4 +681,5 @@ if (form) {
     input.focus();
 }
 </script>
+{% include 'club/ai_draft_script.html' %}
 {% endblock %}

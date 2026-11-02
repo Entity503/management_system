@@ -13,7 +13,8 @@
 - 🧠 **刷题平台**：7 种题型（单选 / 多选 / 判断 / 填空 / 简答 / 综合 / 代码）、3 级难度、答题判分、错题记录、用户出题审核
 - 🎯 **活动系统**：报名 / 签到 / 状态流转（草稿 → 报名中 → 已截止 → 已结束）、人数上限与候补
 - 📢 **公告发布**：置顶、分类、Markdown 渲染、管理员 CRUD
-- 🤖 **多智能体 AI 助手**：5 种角色 + 多会话 + 上下文记忆 + 配额管理，DeepSeek / 阿里云百炼双通道自动回退
+- 🤖 **多智能体 AI 助手**：6 种角色 + 多会话 + 上下文记忆 + 配额管理，DeepSeek / 阿里云百炼双通道自动回退
+- 🧾 **AI 建稿工作台**：运营助手把一句话需求转成题目 / 公告 / 活动草稿，**必须由本人点「确认发布」才落库**，全程可审计
 - 💬 **通用评论系统**：基于 Django ContentType 的 GenericForeignKey，支持活动 / 公告 / 题目 / 资料四种实体
 - 🛠️ **管理员后台**：成员管理（Staff 开关与用户删除）、AI 配额调整、Django Admin 全模型操作
 
@@ -28,7 +29,8 @@
 | **认证** | 邮箱验证码注册、密码登录 / 退出、Session 管理 |
 | **资料** | 分类浏览、上传（单文件不超过 1GB）、Markdown 编辑（EasyMDE）、下载、删除 |
 | **刷题** | 题目列表筛选、答题判分、用户出题、错题记录、Markdown 解析 |
-| **AI** | 多会话、5 种角色、Token 统计、每日配额、双通道 Provider 回退 |
+| **AI** | 多会话、6 种角色、Token 统计、每日配额、双通道 Provider 回退 |
+| **AI 建稿** | 运营助手生成题目 / 公告 / 活动草稿 → 本人确认后发布 → 审计日志 |
 | **活动** | 创建 / 编辑 / 删除、报名 / 取消 / 候补、签到、状态管理 |
 | **公告** | 发布 / 编辑 / 删除、置顶、分类筛选 |
 | **评论** | 通用评论（活动 / 公告 / 题目 / 资料）、删除（作者 / 管理员） |
@@ -37,15 +39,19 @@
 
 资料上传单个文件大小上限为 **1 GB**，后端会强制校验；部署平台还必须允许相应大小的请求体，否则需要同时调整平台或 Web 服务器的上传限制。
 
-### 5 种 AI 智能体
+### 6 种 AI 智能体
 
 | 角色 | agent_type | 典型场景 |
 |------|-----------|----------|
-| 社团助手 | `club_assistant` | 新手指引、功能介绍 |
+| 社团助手 | `club_assistant` | 新手指引、功能介绍、按真实数据回答"最近有什么活动" |
 | 学习教练 | `study_coach` | 按年级 / 专业定制学习路径 |
 | 题目答疑 | `problem_tutor` | 解题思路、复杂度分析、代码示例 |
 | 代码评审 | `code_review` | Bug / 性能 / 可读性 / 风格多维点评 |
 | 面试模拟 | `interview` | 算法 / 八股 / 项目 / 系统设计面试 + 评分 |
+| 运营助手 | `ops_assistant` | 一句话生成题目 / 公告 / 活动草稿，确认后发布 |
+
+> 智能体的中文名、说明、示例、System Prompt 统一维护在 `club/agents.py`，
+> 新增智能体只需改这一个文件 + 生成迁移。
 
 ### 7 种题型
 
@@ -64,22 +70,30 @@ management_system/
 │   ├── asgi.py              # ASGI 入口
 │   └── wsgi.py              # WSGI 入口
 ├── club/                    # 核心业务应用
-│   ├── ai_service.py        # AI Provider 封装 + 5 种智能体 System Prompt
+│   ├── agents.py            # 智能体注册表（名称 / 说明 / 示例 / Prompt）
+│   ├── ai_service.py        # AI Provider 封装 + 统一调用入口
 │   ├── models/              # 数据模型子包
 │   │   ├── __init__.py      #   统一 re-export
-│   │   ├── users.py         #   UserProfile / Skill
+│   │   ├── user.py          #   UserProfile
 │   │   ├── resources.py     #   Resource / ResourceCategory / Tag
-│   │   ├── problems.py      #   Problem / Submission（含 GenericForeignKey 注释）
+│   │   ├── problems.py      #   Problem / Submission / ProblemOption
 │   │   ├── activities.py    #   Activity / ActivitySignup
 │   │   ├── announcements.py #   Announcement
-│   │   ├── comments.py      #   Comment（GenericForeignKey + 防 XSS）
-│   │   └── ai.py            #   AIConversation / AIMessage / AIQuota
+│   │   ├── comments.py      #   Comment（GenericForeignKey）
+│   │   ├── ai.py            #   AIConversation / AIMessage / AIQuota
+│   │   └── ai_actions.py    #   AIDraft / AIActionLog（草稿 + 审计）
 │   ├── forms/               # Django Form 子包
 │   │   ├── __init__.py
 │   │   ├── auth.py          #   RegisterForm / LoginForm / ProfileForm
 │   │   ├── resources.py     #   ResourceForm
 │   │   ├── problems.py      #   ProblemForm
 │   │   └── activities.py    #   ActivityForm
+│   ├── services/            # 服务层（跨视图复用）
+│   │   ├── ai_actions.py    #   草稿解析 / 校验 / 权限 / 落库 / 审计
+│   │   ├── ai_tools.py      #   function calling 工具（查询 + 建稿）
+│   │   ├── agent_runner.py  #   多轮工具调用循环（最多 3 轮）
+│   │   └── platform_context.py # 平台快照，注入 System Prompt
+│   ├── tests/               # 测试（草稿服务 + 建稿链路，34 个用例）
 │   ├── views/               # 视图子包（按业务域拆分）
 │   │   ├── __init__.py      #   统一 re-export（外部 import 完全兼容原 views.py）
 │   │   ├── auth.py          #   注册 / 登录 / 退出 / 个人资料
@@ -105,7 +119,8 @@ management_system/
 │       ├── practice.html             # 题目列表
 │       ├── problem_detail.html       # 答题 + 判分 + 评论
 │       ├── problem_create.html       # 用户出题
-│       ├── ai_chat.html              # AI 对话界面
+│       ├── ai_chat.html              # AI 对话界面（含草稿卡片）
+│       ├── ai_drafts.html            # AI 草稿箱
 │       ├── activity_list.html        # 活动列表
 │       ├── activity_detail.html      # 活动详情 + 报名 + 评论
 │       ├── announcement_list.html    # 公告列表
@@ -249,6 +264,7 @@ python manage.py runserver
 | 用户出题 | `/practice/create/` | 登录 |
 | AI 助手（新建会话） | `/ai/` | 登录 |
 | AI 助手（继续会话） | `/ai/<conversation_id>/` | 登录 |
+| AI 草稿箱 | `/ai/drafts/` | 登录（只能看/确认自己的草稿） |
 | 活动列表 | `/activities/` | 登录 |
 | 活动详情 | `/activities/<id>/` | 登录 |
 | 公告列表 | `/announcements/` | 公开 |
@@ -308,10 +324,50 @@ AI 接口仅允许登录用户访问，并限制单条消息长度和请求频�
 ### 对话流程
 
 1. 用户选择智能体角色 → 创建新会话
-2. System Prompt 预置角色定义
-3. 上下文历史通过 Django ORM 拼接发送
-4. 响应流式写入 `AIMessage` 表，记录模型名和 Token 用量
+2. System Prompt 预置角色定义，并附带一段【平台当前状态】快照（公告 / 活动 / 题库 / 分类）
+3. 只把最近 12 条历史 + 本轮问题发给模型，避免上下文无限膨胀
+4. 响应写入 `AIMessage` 表，记录模型名和 Token 用量
 5. 前端渲染 Markdown + 代码高亮
+
+### AI 建稿（运营助手）
+
+```text
+用户一句话
+  → 运营助手多轮 function calling（最多 3 轮）
+      ├─ 查询：search_activities / search_problems / search_resources / platform_stats
+      └─ 建稿：draft_problem / draft_announcement / draft_activity
+  → 建稿走 club/services/ai_actions.py 的 ModelForm 二次校验
+  → AIDraft(status=pending)
+  → 用户点「确认发布」
+  → 事务内落库 + AIActionLog 审计
+```
+
+| 草稿类型 | 谁能确认发布 | 落库后状态 |
+|----------|--------------|------------|
+| 题目 | 任意登录用户（与 `/practice/create/` 一致） | 已发布 |
+| 公告 | 管理员 | 已发布 |
+| 活动 | 管理员 | 按草稿里的 status（默认草稿） |
+
+设计要点：
+
+- **AI 输出永远不可信**：字段必须过白名单 + ModelForm 校验，非法即拒绝，不猜
+- **必须人工确认**：没有"全自动发布"开关，草稿只能由创建者本人在 `/ai/drafts/` 或对话框里确认
+- **权限只在服务端判断**：提示词注入绕不过 `apply_draft()` 的检查
+- **可审计**：每次生成 / 确认 / 丢弃都会写一条 `AIActionLog`
+- 每人每天最多生成 20 条草稿（`MAX_DRAFTS_PER_DAY`），防止刷模型额度
+
+### 工具调用与流式输出
+
+| 能力 | 说明 |
+|------|------|
+| Function calling | 运营助手最多 3 轮工具调用，结果以 `role=tool` 回填后继续推理 |
+| 工具白名单 | 只暴露 `search_*` / `platform_stats` / `draft_*`，参数用 JSON Schema 约束 |
+| 权限 | 建稿工具在服务端校验权限，普通成员调 `draft_announcement` 会被拒绝并返回原因 |
+| 流式 | `/ai/api/stream/` 用 SSE 逐字返回；前端在流不可用时自动回退到 `/ai/api/send/` |
+| 轨迹 | 工具调用记录存进 `AIMessage.tool_calls`，刷新页面后仍能看到「查询活动 · 查到 3 场」这样的气泡 |
+
+> 工具型智能体先跑完工具再输出文本（草稿场景本来就只有一两句话），
+> 聊天型智能体则是真正的逐字流式。
 
 ---
 
@@ -322,7 +378,7 @@ AI 接口仅允许登录用户访问，并限制单条消息长度和请求频�
 3. **全局样式**：写在 `static/css/site.css`，优先使用 CSS 变量保证主题一致性
 4. **密钥安全**：密钥、密码、API Key、**超管邮箱**只写 `.env`，代码 / 模板 / README 均不出现明文；`.gitignore` 已排除 `.env` / `db.sqlite3` / `media/`
 5. **真实姓名隐私**：普通用户只显示昵称；真实姓名仅 Admin 可见
-6. **出题审核**：用户提交的题目默认 `is_published=False`，管理员在 Django Admin 里审核发布
+6. **内容发布**：AI 建稿必须由创建者本人确认后才会落库；手工入口（出题 / 上传资料）仍是提交即生效，权限规则保持一致
 7. **图片 / 文件上传**：必须保留表单校验，不能只依赖前端限制
 8. **新增模块**：先保持在 `club/` 内实现，稳定后再考虑拆分应用
 
@@ -333,6 +389,9 @@ AI 接口仅允许登录用户访问，并限制单条消息长度和请求频�
 ```powershell
 # 检查 Django 配置
 python manage.py check
+
+# 跑测试（SQLite 内存库，不会碰本地/线上数据）
+$env:DJANGO_USE_SQLITE="True"; python manage.py test club.tests
 
 # 编译检查所有 Python 文件
 python -m compileall -q club management_system
@@ -377,6 +436,8 @@ resend>=2.0,<3.0
 - ✅ 公告发布与分类
 - ✅ 多智能体 AI 助手（5 种角色 / 双通道 Provider）
 - ✅ AI 配额管理
+- ✅ AI 建稿工作台（运营助手 + 草稿确认 + 审计）
+- ✅ 平台快照注入（AI 知道社团当前有什么）
 - ✅ 通用评论系统
 - ✅ 星空主题 UI + 粒子特效
 - ✅ 管理员后台

@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% block title %}AI 草稿箱 - 计算机俱乐部{% endblock %}
+{% block extra_css %}
+<style>
+    .draft-box-head { display: flex; align-items: baseline; gap: 12px; margin: 28px 0 12px; }
+    .draft-box-head h2 { font-family: Georgia, serif; font-size: 1.2rem; font-weight: 400; margin: 0; color: var(--ink); }
+    .draft-box-head span { font-size: .75rem; color: var(--muted); }
+    .draft-history { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: .84rem; }
+    .draft-history th, .draft-history td {
+        padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top;
+    }
+    .draft-history th { font-size: .72rem; color: var(--coral); letter-spacing: .08em; font-weight: 600; }
+    .draft-history td { color: var(--ink); }
+    .draft-history .draft-error { color: #ff9d9d; font-size: .74rem; margin-top: 4px; }
+    .draft-history .draft-empty { color: var(--muted); text-align: center; padding: 28px 0; }
+    .draft-note { color: var(--muted); font-size: .82rem; line-height: 1.7; }
+</style>
+{% endblock %}
+{% block content %}
+<section class="content-page">
+    {# 草稿卡片的「确认发布 / 丢弃」走 fetch POST，需要页面上有 CSRF token #}
+    <div hidden>{% csrf_token %}</div>
+    <p class="eyebrow">AI DRAFTS</p>
+    <h1>AI 草稿箱</h1>
+    <p class="draft-note">
+        运营助手生成的内容<strong>不会自动发布</strong>。这里每一条都需要你本人点「确认发布」，
+        才会真正写入题目 / 公告 / 活动。
+    </p>
+
+    <div class="draft-box-head">
+        <h2>待确认</h2>
+        <span>{{ pending_drafts|length }} 条</span>
+    </div>
+
+    {% for draft in pending_drafts %}
+        {% include 'club/ai_draft_card.html' with draft=draft %}
+    {% empty %}
+        <p class="empty">
+            没有待确认的草稿。去 <a href="{% url 'club:ai-chat' %}" style="color:var(--coral)">AI 助手</a>
+            找「运营助手」，比如「帮我出一道计算机网络的选择题」。
+        </p>
+    {% endfor %}
+
+    <div class="draft-box-head">
+        <h2>历史记录</h2>
+        <span>最近 100 条</span>
+    </div>
+
+    <table class="draft-history">
+        <thead>
+            <tr>
+                <th>时间</th>
+                <th>类型</th>
+                <th>标题</th>
+                <th>状态</th>
+                <th>结果</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for draft in history_drafts %}
+            <tr>
+                <td>{{ draft.created_at|date:'m-d H:i' }}</td>
+                <td>{{ draft.get_kind_display }}</td>
+                <td>{{ draft.display_title }}</td>
+                <td>{{ draft.get_status_display }}</td>
+                <td>
+                    {% if draft.object_url %}
+                        <a href="{{ draft.object_url }}" style="color:var(--coral)">查看 →</a>
+                    {% else %}
+                        —
+                    {% endif %}
+                    {% if draft.error %}<div class="draft-error">{{ draft.error|truncatechars:90 }}</div>{% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="draft-empty">还没有历史记录。</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}
+{% block extra_js %}
+{% include 'club/ai_draft_script.html' %}
+{% endblock %}

@@ -1,0 +1,92 @@
+<script>
+/* AI 草稿卡片交互：确认发布 / 丢弃（聊天页和草稿箱共用） */
+(function () {
+    var APPLY_TPL = "{% url 'club:ai-draft-apply' 0 %}";
+    var DISCARD_TPL = "{% url 'club:ai-draft-discard' 0 %}";
+
+    function withId(tpl, id) {
+        return tpl.replace('/0/', '/' + id + '/');
+    }
+
+    function csrfToken() {
+        var el = document.querySelector('[name=csrfmiddlewaretoken]');
+        return el ? el.value : '';
+    }
+
+    async function postDraft(url) {
+        var resp = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken(),
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+        });
+        var data = {};
+        try { data = await resp.json(); } catch (err) { /* 非 JSON 响应 */ }
+        if (!resp.ok) {
+            throw new Error(data.error || '操作失败，请刷新页面后重试。');
+        }
+        return data;
+    }
+
+    function markApplied(card, data) {
+        card.classList.add('is-done');
+        var status = card.querySelector('.draft-status');
+        if (status) status.textContent = '已发布';
+        var actions = card.querySelector('.draft-actions');
+        if (!actions) return;
+        actions.innerHTML = '';
+        var ok = document.createElement('span');
+        ok.className = 'draft-ok';
+        ok.textContent = '✅ 已发布';
+        actions.appendChild(ok);
+        if (data && data.url) {
+            var link = document.createElement('a');
+            link.className = 'draft-link';
+            link.href = data.url;
+            link.textContent = '查看 →';
+            actions.appendChild(link);
+        }
+    }
+
+    function markDiscarded(card) {
+        card.classList.add('is-done');
+        var status = card.querySelector('.draft-status');
+        if (status) status.textContent = '已丢弃';
+        var actions = card.querySelector('.draft-actions');
+        if (actions) actions.innerHTML = '<span class="draft-ok">已丢弃</span>';
+    }
+
+    document.addEventListener('click', async function (event) {
+        var button = event.target.closest('.draft-apply, .draft-discard');
+        if (!button || button.disabled) return;
+        event.preventDefault();
+
+        var card = button.closest('.draft-card');
+        var id = button.dataset.id || (card && card.dataset.draftId);
+        if (!id) return;
+
+        var isApply = button.classList.contains('draft-apply');
+        var original = button.textContent;
+        button.disabled = true;
+        button.textContent = isApply ? '发布中…' : '处理中…';
+
+        try {
+            if (isApply) {
+                var data = await postDraft(withId(APPLY_TPL, id));
+                if (card) markApplied(card, data);
+                document.dispatchEvent(new CustomEvent('draft:applied', { detail: { id: id, data: data } }));
+            } else {
+                await postDraft(withId(DISCARD_TPL, id));
+                if (card) markDiscarded(card);
+            }
+            document.dispatchEvent(new CustomEvent('draft:resolved', { detail: { id: id, applied: isApply } }));
+        } catch (err) {
+            button.disabled = false;
+            button.textContent = original;
+            alert(err.message || '操作失败');
+        }
+    });
+})();
+</script>

@@ -405,3 +405,83 @@ textarea:focus { border-color: var(--glow) !important; background: rgba(107, 140
     .list-item { padding: 10px 0; }
     .event-item { padding: 10px 0; }
 }
+
+/* ==========================================================================
+   AI 草稿卡片 & 智能体选择（运营助手建稿流程）
+   ========================================================================== */
+.draft-strip { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+.draft-card {
+    border: 1px solid rgba(107, 140, 255, 0.45);
+    background: linear-gradient(135deg, rgba(107, 140, 255, 0.14), rgba(255, 122, 200, 0.08));
+    border-radius: 14px;
+    padding: 14px 18px;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+}
+.draft-card.is-done { opacity: .6; border-color: var(--line); background: rgba(22, 25, 50, 0.55); }
+.draft-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.draft-kind {
+    font-size: .7rem; padding: 2px 10px; border-radius: 999px;
+    background: rgba(255, 122, 200, 0.18); color: var(--coral);
+    border: 1px solid rgba(255, 122, 200, 0.35);
+}
+.draft-status { margin-left: auto; font-size: .72rem; color: var(--muted); }
+.draft-title { font-family: Georgia, serif; font-size: 1rem; margin: 0 0 10px; color: var(--ink); }
+.draft-fields {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 8px 18px; margin: 0 0 12px;
+}
+.draft-field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.draft-field dt { font-size: .68rem; color: var(--coral); letter-spacing: .06em; }
+.draft-field dd {
+    margin: 0; font-size: .82rem; color: var(--ink);
+    word-break: break-word; white-space: pre-wrap;
+    max-height: 6.5em; overflow: hidden;
+}
+.draft-actions { display: flex; gap: 10px; align-items: center; }
+.draft-btn { border: 0; border-radius: 8px; padding: 7px 16px; font: inherit; font-size: .82rem; cursor: pointer; }
+.draft-apply { background: linear-gradient(135deg, #6b8cff, #8b5cf6); color: white; }
+.draft-apply:hover { box-shadow: 0 4px 14px rgba(107, 140, 255, 0.4); }
+.draft-discard { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+.draft-discard:hover { color: var(--coral); border-color: var(--coral); }
+.draft-btn:disabled { opacity: .5; cursor: wait; }
+.draft-ok { color: var(--mint); font-size: .82rem; }
+.draft-link { color: var(--coral); font-size: .82rem; }
+
+/* 智能体选择卡片 */
+.agent-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 12px; margin-top: 20px;
+}
+.agent-card {
+    text-align: left; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 16px; color: inherit; cursor: pointer;
+    font: inherit; transition: border-color .15s, transform .15s;
+}
+.agent-card:hover { border-color: rgba(107, 140, 255, 0.5); transform: translateY(-2px); }
+.agent-card strong { display: block; font-size: .9rem; color: var(--ink); margin-bottom: 4px; }
+.agent-card span { display: block; font-size: .75rem; color: var(--muted); line-height: 1.5; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.chip {
+    background: rgba(107, 140, 255, 0.12); border: 1px solid rgba(107, 140, 255, 0.3);
+    color: var(--ink); border-radius: 999px; padding: 5px 12px;
+    font: inherit; font-size: .75rem; cursor: pointer; text-align: left;
+}
+.chip:hover { border-color: var(--coral); color: var(--coral); }
+.drafts-link {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 16px; border-bottom: 1px solid var(--line);
+    color: var(--muted); font-size: .8rem;
+}
+.drafts-link:hover { color: var(--coral); }
+.drafts-link b { color: var(--coral); }
+
+/* 工具调用气泡 */
+.msg-tools { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.tool-chip {
+    font-size: .7rem; padding: 2px 8px; border-radius: 999px;
+    background: rgba(107, 140, 255, 0.12);
+    border: 1px solid rgba(107, 140, 255, 0.3);
+    color: var(--muted);
+}
+.tool-chip.is-fail { border-color: rgba(255, 107, 107, 0.45); color: #ff9d9d; }

@@ -1,0 +1,21 @@
+<article class="draft-card" data-draft-id="{{ draft.pk }}">
+    <header class="draft-card-head">
+        <span class="draft-kind">{{ draft.get_kind_display }}</span>
+        <span class="draft-status">待确认</span>
+    </header>
+    <h3 class="draft-title">{{ draft.display_title }}</h3>
+    <dl class="draft-fields">
+        {% for label, value in draft.display_fields %}
+            {% if label != '标题' %}
+            <div class="draft-field">
+                <dt>{{ label }}</dt>
+                <dd>{{ value|truncatechars:160 }}</dd>
+            </div>
+            {% endif %}
+        {% endfor %}
+    </dl>
+    <footer class="draft-actions">
+        <button type="button" class="draft-btn draft-apply" data-id="{{ draft.pk }}">确认发布</button>
+        <button type="button" class="draft-btn draft-discard" data-id="{{ draft.pk }}">丢弃</button>
+    </footer>
+</article>

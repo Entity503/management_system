@@ -69,6 +69,14 @@ urlpatterns = [
     path('ai/new/', views.ai_conversation_new, name='ai-new'),
     path('ai/<int:pk>/delete/', views.ai_conversation_delete, name='ai-delete'),
     path('ai/api/send/', views.ai_api_send, name='ai-api-send'),
+    path('ai/api/stream/', views.ai_api_stream, name='ai-api-stream'),
+
+    # ------------------------------------------------------------------
+    # AI 草稿箱（所有发布都必须由当前登录用户自己确认）
+    # ------------------------------------------------------------------
+    path('ai/drafts/', views.ai_drafts, name='ai-drafts'),
+    path('ai/drafts/<int:pk>/apply/', views.ai_draft_apply, name='ai-draft-apply'),
+    path('ai/drafts/<int:pk>/discard/', views.ai_draft_discard, name='ai-draft-discard'),
 
     # ------------------------------------------------------------------
     # 公告

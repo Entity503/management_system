@@ -9,6 +9,7 @@ club.models 包（re-export 层）
 
 from .activities import Activity, ActivitySignup
 from .ai import AIConversation, AIMessage, AIQuota
+from .ai_actions import AIActionLog, AIDraft
 from .announcements import Announcement
 from .base import TimeStampedModel
 from .comments import Comment
@@ -17,11 +18,13 @@ from .resources import Resource, ResourceCategory
 from .user import UserProfile
 
 __all__ = [
-    'Activity',
-    'ActivitySignup',
+    'AIActionLog',
     'AIConversation',
+    'AIDraft',
     'AIMessage',
     'AIQuota',
+    'Activity',
+    'ActivitySignup',
     'Announcement',
     'Comment',
     'Problem',

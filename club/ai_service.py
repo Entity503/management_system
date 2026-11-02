@@ -1,190 +1,266 @@
 """
 AI 服务层
-=========
-封装大模型 Provider 调用和智能体 System Prompt 管理。
+==========
+封装大模型 Provider 调用，是唯一对外出入口。
 
 设计要点：
-- Provider 回退链：用户请求 → DeepSeek（优先） → 阿里云百炼（回退）
+- Provider 回退链：DeepSeek（优先） → 阿里云百炼（回退）
 - 两者都未配置时抛 RuntimeError，由 views 层捕获并给用户友好提示
-- 每个 Provider 函数返回统一格式 {'content', 'model', 'tokens', 'provider'}
-- 超时统一 60 秒，stream=False（暂不支持流式输出）
+- 统一返回 {'content', 'tool_calls', 'model', 'tokens', 'provider'}
+- ``stream_messages`` 是生成器，逐块产出 ('delta', 文本) / ('done', 元信息)
+- 智能体的 System Prompt 统一维护在 club/agents.py
 """
 
+import json
 import os
 
 import requests
 
-# ---------------------------------------------------------------------------
-# 5 种智能体的 System Prompt
-# ---------------------------------------------------------------------------
-# 每个智能体角色在其 Prompt 中定义了：能力边界、语气风格、回答格式要求。
-# 如需新增智能体类型，在此处追加后同步更新 AIConversation.AGENT_CHOICES。
+from .agents import AGENT_LABELS, AGENT_PROMPTS, DEFAULT_AGENT  # noqa: F401  re-export 兼容旧引用
 
-AGENT_PROMPTS = {
-    'club_assistant': (
-        '你是计算机俱乐部的社团助手。你的职责是：\n'
-        '1. 介绍社团的活动、资料、刷题等功能；\n'
-        '2. 帮助新成员了解 10 个学习模块（数据结构、组成原理、网络、操作系统、C/C++、Java、Python、MySQL、离散数学、其它）；\n'
-        '3. 引导用户使用上传资料、提交题目等功能；\n'
-        '4. 语气亲切友好，像俱乐部里热心的学长/学姐。\n'
-        '回答使用 Markdown 格式，代码用 ```language 包裹。'
-    ),
-    'study_coach': (
-        '你是一位经验丰富的计算机学习教练。你的职责是：\n'
-        '1. 根据用户的年级、专业和目标，定制分阶段的学习路线图；\n'
-        '2. 在 10 个模块（数据结构、组成原理、网络、操作系统、C/C++、Java、Python、MySQL、离散数学、其它）中推荐合适的学习顺序；\n'
-        '3. 推荐具体的书籍、视频、在线课程和刷题网站；\n'
-        '4. 帮助制定每周学习计划和时间管理策略；\n'
-        '5. 鼓励用户坚持学习，保持积极的学习心态。\n'
-        '回答使用 Markdown 格式，代码用 ```language 包裹，尽量结构化。'
-    ),
-    'problem_tutor': (
-        '你是计算机题库的题目答疑老师。你的职责是：\n'
-        '1. 分析计算机相关题目的解题思路和最优解法；\n'
-        '2. 说明不同解法的时间/空间复杂度；\n'
-        '3. 提供可运行的代码示例，支持 C/C++、Java、Python；\n'
-        '4. 讲解相关的知识点（数据结构、算法、操作系统、网络等）；\n'
-        '5. 引导用户思考，而不是直接给出答案。\n'
-        '回答使用 Markdown 格式，代码用 ```language 包裹。'
-    ),
-    'code_review': (
-        '你是一位资深的代码评审专家。你的职责是：\n'
-        '1. 审查代码中的 bug、边界条件错误和安全隐患；\n'
-        '2. 评估代码的时间复杂度、空间复杂度和性能瓶颈；\n'
-        '3. 检查代码风格、命名规范和可读性；\n'
-        '4. 提出具体的改进建议和优化方案；\n'
-        '5. 给出改进后的代码示例。\n'
-        '评审维度：正确性 → 性能 → 可读性 → 风格规范。\n'
-        '回答使用 Markdown 格式，代码用 ```language 包裹。'
-    ),
-    'interview': (
-        '你是计算机专业的资深面试官。你的职责是：\n'
-        '1. 进行算法题面试，实时评估候选人的解题思路；\n'
-        '2. 提问计算机网络、操作系统、数据库、数据结构等八股文；\n'
-        '3. 进行项目经验深挖和系统设计；\n'
-        '4. 每次候选人回答后给出评分（1-10）和具体反馈；\n'
-        '5. 面试结束后给出综合评价和改进建议。\n'
-        '风格：严肃、专业、模拟真实面试场景。\n'
-        '回答使用 Markdown 格式，代码用 ```language 包裹。'
-    ),
-}
+DEFAULT_TIMEOUT = 60
+DEFAULT_MODEL = 'deepseek-chat'
+BAILIAN_MODEL = 'qwen-plus'
 
-# 智能体类型 → 中文名，用于前端下拉选择和后端日志
-AGENT_LABELS = {
-    'club_assistant': '社团助手',
-    'study_coach': '学习教练',
-    'problem_tutor': '题目答疑',
-    'code_review': '代码评审',
-    'interview': '面试模拟',
-}
+# 平台配置：DeepSeek 与百炼的兼容模式都走 OpenAI 协议
+DEEPSEEK_URL = '/chat/completions'
+BAILIAN_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions'
 
 
-def _build_messages(agent_type, history, user_message):
+def build_messages(agent_type, history, user_message, context=None):
     """
     组装传给大模型的 messages 列表。
 
-    顺序：System Prompt → 历史上下文（user + assistant 交替）→ 本轮 user 消息。
-    agent_type 不在 AGENT_PROMPTS 里时自动 fallback 到社团助手，保证不会空崩。
+    顺序：System Prompt（+ 平台快照）→ 历史上下文（user + assistant 交替）→ 本轮 user 消息。
+    agent_type 不在注册表里时自动 fallback 到默认智能体，保证不会空崩。
     """
-    system_prompt = AGENT_PROMPTS.get(agent_type, AGENT_PROMPTS['club_assistant'])
+    system_prompt = AGENT_PROMPTS.get(agent_type, AGENT_PROMPTS[DEFAULT_AGENT])
+    if context:
+        system_prompt = f'{system_prompt}\n\n{context}'
     messages = [{'role': 'system', 'content': system_prompt}]
     for msg in history:
+        if msg.role not in ('user', 'assistant'):
+            continue
         messages.append({'role': msg.role, 'content': msg.content})
     messages.append({'role': 'user', 'content': user_message})
     return messages
 
 
-def call_deepseek(messages, model='deepseek-chat', temperature=0.7):
-    """
-    调用 DeepSeek Chat API。
-
-    - 地址：{DEEPSEEK_BASE_URL}/chat/completions（默认 https://api.deepseek.com）
-    - model 默认 deepseek-chat，可通过参数传入 deepseek-reasoner 等
-    - 返回统一格式 dict，方便上层 chat() 函数透明处理
-    """
-    api_key = os.getenv('DEEPSEEK_API_KEY')
-    base_url = os.getenv('DEEPSEEK_BASE_URL', 'https://api.deepseek.com')
-    if not api_key:
-        raise RuntimeError('DEEPSEEK_API_KEY 未配置')
-    resp = requests.post(
-        f'{base_url}/chat/completions',
-        headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'},
-        json={
-            'model': model,
-            'messages': messages,
-            'temperature': temperature,
-            'stream': False,
-        },
-        timeout=60,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    return {
-        'content': data['choices'][0]['message']['content'],
-        'model': data.get('model', model),
-        'tokens': data.get('usage', {}).get('total_tokens', 0),
-        'provider': 'deepseek',
-    }
+# 兼容旧调用
+_build_messages = build_messages
 
 
-def call_bailian(messages, model='qwen-plus', temperature=0.7):
-    """
-    调用阿里云百炼（DashScope）兼容模式。
-
-    - 地址固定为 https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
-    - 兼容 OpenAI 格式，所以请求体结构与 DeepSeek 完全一致
-    """
-    api_key = os.getenv('BAILIAN_API_KEY')
-    if not api_key:
-        raise RuntimeError('BAILIAN_API_KEY 未配置')
-    resp = requests.post(
-        'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
-        headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'},
-        json={
-            'model': model,
-            'messages': messages,
-            'temperature': temperature,
-            'stream': False,
-        },
-        timeout=60,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    return {
-        'content': data['choices'][0]['message']['content'],
-        'model': data.get('model', model),
-        'tokens': data.get('usage', {}).get('total_tokens', 0),
-        'provider': 'bailian',
-    }
-
-
-def chat(agent_type, history, user_message):
-    """
-    AI 对话入口（唯一对外接口）。
-
-    执行流程：
-    1. 根据 agent_type 构建带 System Prompt 的 messages
-    2. 按「配置优先级」组装 Provider 列表（谁先配置谁先试）
-    3. 依次尝试，第一个成功的 Provider 结果直接返回
-    4. 全部失败则抛 RuntimeError，被 views.ai_api_send 捕获后写一条错误 AIMessage
-
-    这样设计的好处：
-    - 用户无感知底层 Provider 切换
-    - 可以未来方便追加新 Provider（如 硅基流动 / 通义千问原生 / 本地 Ollama）
-    - 配置哪个用哪个，不强制要求两个都配
-    """
-    messages = _build_messages(agent_type, history, user_message)
+def _provider_functions():
+    """按配置优先级返回 [(provider 名, 调用函数), ...]。"""
     providers = []
     if os.getenv('DEEPSEEK_API_KEY'):
         providers.append(('deepseek', call_deepseek))
     if os.getenv('BAILIAN_API_KEY'):
         providers.append(('bailian', call_bailian))
+    return providers
+
+
+def _post_deepseek(payload, stream=False):
+    api_key = os.getenv('DEEPSEEK_API_KEY')
+    base_url = os.getenv('DEEPSEEK_BASE_URL', 'https://api.deepseek.com')
+    if not api_key:
+        raise RuntimeError('DEEPSEEK_API_KEY 未配置')
+    return requests.post(
+        f'{base_url}{DEEPSEEK_URL}',
+        headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'},
+        json=payload,
+        timeout=DEFAULT_TIMEOUT,
+        stream=stream,
+    )
+
+
+def _post_bailian(payload, stream=False):
+    api_key = os.getenv('BAILIAN_API_KEY')
+    if not api_key:
+        raise RuntimeError('BAILIAN_API_KEY 未配置')
+    return requests.post(
+        BAILIAN_URL,
+        headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'},
+        json=payload,
+        timeout=DEFAULT_TIMEOUT,
+        stream=stream,
+    )
+
+
+def _parse_completion(data, model):
+    """把非流式响应压成统一结构。"""
+    choice = (data.get('choices') or [{}])[0]
+    message = choice.get('message') or {}
+    tool_calls = message.get('tool_calls') or []
+    return {
+        'content': message.get('content') or '',
+        'tool_calls': tool_calls,
+        'model': data.get('model') or model,
+        'tokens': (data.get('usage') or {}).get('total_tokens', 0),
+    }
+
+
+def call_deepseek(messages, model=DEFAULT_MODEL, temperature=0.7, tools=None):
+    """
+    调用 DeepSeek Chat API（非流式）。
+
+    - 地址：{DEEPSEEK_BASE_URL}/chat/completions（默认 https://api.deepseek.com）
+    - tools 不为空时走 function calling，返回值里带 tool_calls
+    """
+    payload = {
+        'model': model,
+        'messages': messages,
+        'temperature': temperature,
+        'stream': False,
+    }
+    if tools:
+        payload['tools'] = tools
+        payload['tool_choice'] = 'auto'
+
+    resp = _post_deepseek(payload)
+    resp.raise_for_status()
+    result = _parse_completion(resp.json(), model)
+    result['provider'] = 'deepseek'
+    return result
+
+
+def call_bailian(messages, model=BAILIAN_MODEL, temperature=0.7, tools=None):
+    """
+    调用阿里云百炼（DashScope）兼容模式。
+
+    请求体与 DeepSeek 完全一致（OpenAI 协议），因此复用同一套解析逻辑。
+    """
+    payload = {
+        'model': model,
+        'messages': messages,
+        'temperature': temperature,
+        'stream': False,
+    }
+    if tools:
+        payload['tools'] = tools
+        payload['tool_choice'] = 'auto'
+
+    resp = _post_bailian(payload)
+    resp.raise_for_status()
+    result = _parse_completion(resp.json(), model)
+    result['provider'] = 'bailian'
+    return result
+
+
+def chat_messages(messages, tools=None, temperature=0.7):
+    """
+    直接对 messages 发起一次（可能带工具的）对话，供 agent_runner 多轮调用。
+
+    依次尝试已配置的 Provider，第一个成功的结果直接返回。
+    """
+    providers = _provider_functions()
     if not providers:
         raise RuntimeError('未配置任何 AI API Key，请在 .env 中设置 DEEPSEEK_API_KEY 或 BAILIAN_API_KEY')
+
     last_err = None
     for name, fn in providers:
         try:
-            return fn(messages)
-        except Exception as e:
-            last_err = e
+            return fn(messages, tools=tools, temperature=temperature)
+        except Exception as exc:  # noqa: BLE001  需要把所有 Provider 都试一遍
+            last_err = exc
     raise RuntimeError(f'AI 调用失败（{len(providers)} 个 Provider 均失败）: {last_err}')
+
+
+def chat(agent_type, history, user_message, context=None):
+    """
+    AI 对话入口（单轮，无工具）。
+
+    返回统一格式字典；全部 Provider 失败时抛 RuntimeError。
+    """
+    messages = build_messages(agent_type, history, user_message, context=context)
+    return chat_messages(messages)
+
+
+# ---------------------------------------------------------------------------
+# 流式输出（SSE）
+# ---------------------------------------------------------------------------
+def _iter_stream_chunks(response, model):
+    """
+    解析 OpenAI 协议的流式响应，逐块产出 ('delta', 文本) / ('done', 元信息)。
+
+    [DONE] 之后结束；usage 只有 provider 返回时才有。
+    """
+    model_name = model
+    total_tokens = 0
+
+    for raw_line in response.iter_lines():
+        if not raw_line:
+            continue
+        # 不依赖 requests 的编码推断：SSE 一律按 UTF-8 解码
+        line = raw_line.decode('utf-8', errors='replace').strip()
+        if not line.startswith('data:'):
+            continue
+        data_str = line[5:].strip()
+        if data_str == '[DONE]':
+            break
+        try:
+            data = json.loads(data_str)
+        except (TypeError, ValueError):
+            continue
+
+        model_name = data.get('model') or model_name
+        usage = data.get('usage') or {}
+        if usage:
+            total_tokens = usage.get('total_tokens', total_tokens)
+
+        choices = data.get('choices') or []
+        if not choices:
+            continue
+        delta = choices[0].get('delta') or {}
+        text = delta.get('content')
+        if text:
+            yield 'delta', text
+
+    yield 'done', {'model': model_name, 'tokens': total_tokens}
+
+
+def _stream_provider(post_fn, messages, model, temperature):
+    payload = {
+        'model': model,
+        'messages': messages,
+        'temperature': temperature,
+        'stream': True,
+    }
+    response = post_fn(payload, stream=True)
+    response.raise_for_status()
+    try:
+        yield from _iter_stream_chunks(response, model)
+    finally:
+        response.close()
+
+
+def stream_messages(messages, model=None, temperature=0.7):
+    """
+    流式对话生成器（仅文本，不含工具）。
+
+    产出 ('delta', 文本片段) ... 最后产出 ('done', {'model', 'tokens'})。
+    已经吐出内容后再出错会直接抛出，由视图层给前端发 error 事件。
+    """
+    providers = _provider_functions()
+    if not providers:
+        raise RuntimeError('未配置任何 AI API Key，请在 .env 中设置 DEEPSEEK_API_KEY 或 BAILIAN_API_KEY')
+
+    last_err = None
+    for name, fn in providers:
+        emitted = False
+        try:
+            if name == 'deepseek':
+                generator = _stream_provider(_post_deepseek, messages, model or DEFAULT_MODEL, temperature)
+            else:
+                generator = _stream_provider(_post_bailian, messages, model or BAILIAN_MODEL, temperature)
+
+            for kind, payload in generator:
+                if kind == 'delta':
+                    emitted = True
+                yield kind, payload
+            return
+        except Exception as exc:  # noqa: BLE001
+            last_err = exc
+            if emitted:
+                raise
+    raise RuntimeError(f'AI 流式调用失败（{len(providers)} 个 Provider 均失败）: {last_err}')

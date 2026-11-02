@@ -11,7 +11,9 @@ list_filter 控制右侧筛选器，search_fields 控制顶部搜索框搜索哪
 from django.contrib import admin
 
 from .models import (
+    AIActionLog,
     AIConversation,
+    AIDraft,
     AIMessage,
     Activity,
     ActivitySignup,
@@ -106,3 +108,32 @@ class AIMessageAdmin(admin.ModelAdmin):
     list_display = ('conversation', 'role', 'model', 'tokens', 'created_at')
     list_filter = ('role', 'model')
     search_fields = ('content',)
+
+
+@admin.register(AIDraft)
+class AIDraftAdmin(admin.ModelAdmin):
+    """
+    AI 草稿：只读巡检用。
+
+    草稿的确认/丢弃只允许草稿本人在站内操作（服务层会校验 user_id），
+    这里不提供「一键发布」，避免绕过用户本人的确认。
+    """
+    list_display = ('id', 'kind', 'status', 'user', 'created_at', 'applied_pk')
+    list_filter = ('kind', 'status')
+    search_fields = ('user__username', 'user__email')
+    readonly_fields = ('payload', 'error', 'applied_pk', 'applied_at')
+
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(AIActionLog)
+class AIActionLogAdmin(admin.ModelAdmin):
+    """AI 操作审计日志：谁在什么时候确认了什么，只读。"""
+    list_display = ('created_at', 'user', 'action', 'kind', 'ok', 'target_pk')
+    list_filter = ('action', 'ok', 'kind')
+    search_fields = ('user__username', 'detail')
+    readonly_fields = ('user', 'action', 'kind', 'target_pk', 'ok', 'detail', 'created_at')
+
+    def has_add_permission(self, request):
+        return False
