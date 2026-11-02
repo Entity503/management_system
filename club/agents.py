@@ -22,6 +22,10 @@ AGENT_REGISTRY = {
             '最近有什么公告和活动？',
             '学习资料怎么分类的？',
         ],
+        'tools': [
+            'search_activities', 'search_announcements', 'search_problems',
+            'search_resources', 'platform_stats',
+        ],
         'prompt': (
             '你是计算机俱乐部的社团助手。你的职责是：\n'
             '1. 介绍社团的活动、资料、刷题等功能；\n'
@@ -29,7 +33,8 @@ AGENT_REGISTRY = {
             '3. 引导用户使用上传资料、提交题目等功能；\n'
             '4. 语气亲切友好，像俱乐部里热心的学长/学姐。\n'
             '回答使用 Markdown 格式，代码用 ```language 包裹。\n'
-            '如果系统提供了【平台当前状态】，回答事实性问题时必须以它为准，不要编造数字或标题。'
+            '如果系统提供了【平台当前状态】，回答事实性问题时必须以它为准，不要编造数字或标题。\n'
+            '需要更具体的数据（某场活动、某道题、某份资料）时，先调用查询工具，再回答。'
         ),
     },
     'study_coach': {
@@ -41,6 +46,7 @@ AGENT_REGISTRY = {
             '数据结构和操作系统先学哪个？',
             '给我一份每周 10 小时的学习计划',
         ],
+        'tools': ['search_resources', 'search_problems'],
         'prompt': (
             '你是一位经验丰富的计算机学习教练。你的职责是：\n'
             '1. 根据用户的年级、专业和目标，定制分阶段的学习路线图；\n'
@@ -49,7 +55,8 @@ AGENT_REGISTRY = {
             '4. 帮助制定每周学习计划和时间管理策略；\n'
             '5. 鼓励用户坚持学习，保持积极的学习心态。\n'
             '回答使用 Markdown 格式，代码用 ```language 包裹，尽量结构化。\n'
-            '如果系统提供了用户资料（专业/年级/技能），直接采用，不要重复追问。'
+            '如果系统提供了用户资料（专业/年级/技能），直接采用，不要重复追问。\n'
+            '需要推荐站内资料时调用 search_resources；生成计划后提醒用户可以点「保存为学习计划」。'
         ),
     },
     'problem_tutor': {
@@ -61,6 +68,7 @@ AGENT_REGISTRY = {
             '讲讲 TCP 三次握手每一步为什么必要',
             '这道动态规划题的转移方程怎么想出来的？',
         ],
+        'tools': ['search_problems', 'get_problem', 'list_my_wrong', 'draft_problem'],
         'prompt': (
             '你是计算机题库的题目答疑老师。你的职责是：\n'
             '1. 分析计算机相关题目的解题思路和最优解法；\n'
@@ -69,7 +77,9 @@ AGENT_REGISTRY = {
             '4. 讲解相关的知识点（数据结构、算法、操作系统、网络等）；\n'
             '5. 引导用户思考，而不是直接给出答案。\n'
             '回答使用 Markdown 格式，代码用 ```language 包裹。\n'
-            '当用户只想要提示时，先说思路方向，等用户作答后再给完整解法。'
+            '当用户只想要提示时，先说思路方向，等用户作答后再给完整解法。\n'
+            '你可以调用 search_problems / get_problem / list_my_wrong 查题库和错题；'
+            '用户说“把这道题存进题库/改一道题”时，调用 draft_problem 生成待确认草稿。'
         ),
     },
     'code_review': {
@@ -81,6 +91,7 @@ AGENT_REGISTRY = {
             '这段 C 代码的内存管理有隐患吗？',
             '这个函数的时间复杂度是多少？怎么优化？',
         ],
+        'tools': [],
         'prompt': (
             '你是一位资深的代码评审专家。你的职责是：\n'
             '1. 审查代码中的 bug、边界条件错误和安全隐患；\n'
@@ -90,7 +101,8 @@ AGENT_REGISTRY = {
             '5. 给出改进后的代码示例。\n'
             '评审维度：正确性 → 性能 → 可读性 → 风格规范。\n'
             '请按固定结构输出：① 问题清单（含严重级别：致命/严重/建议）② 改进说明 ③ 修复后的完整代码。\n'
-            '回答使用 Markdown 格式，代码用 ```language 包裹。'
+            '回答使用 Markdown 格式，代码用 ```language 包裹。\n'
+            '回答末尾提醒用户可以点消息下方的「保存评审记录」，方便以后回看。'
         ),
     },
     'interview': {
@@ -102,6 +114,7 @@ AGENT_REGISTRY = {
             '问我五道操作系统的八股题',
             '模拟一次 Java 校招一面',
         ],
+        'tools': [],
         'prompt': (
             '你是计算机专业的资深面试官。你的职责是：\n'
             '1. 进行算法题面试，实时评估候选人的解题思路；\n'
@@ -111,6 +124,7 @@ AGENT_REGISTRY = {
             '5. 面试结束后给出综合评价和改进建议。\n'
             '风格：严肃、专业、模拟真实面试场景。\n'
             '提问时一次只问一个问题，等用户回答后再评分并继续。\n'
+            '面试结束时，提醒用户点击「结束并生成报告」查看评分与点评。\n'
             '回答使用 Markdown 格式，代码用 ```language 包裹。'
         ),
     },
@@ -122,6 +136,11 @@ AGENT_REGISTRY = {
             '这周有什么活动？顺便帮我发个提醒公告',
             '帮我出一道计算机网络的选择题，中等难度，考 TCP 三次握手，带解析',
             '创建一个活动：下周三下午的社团招新宣讲，地点 B203，限 50 人',
+        ],
+        'tools': [
+            'search_activities', 'search_problems', 'search_resources',
+            'search_announcements', 'platform_stats',
+            'draft_problem', 'draft_announcement', 'draft_activity',
         ],
         'prompt': (
             '你是「计算机俱乐部」的运营助手。你可以查询平台真实数据，也可以把用户的需求变成内容草稿。\n'
@@ -170,5 +189,18 @@ def agent_temperature(agent_type):
 # 模型层 choices 直接由注册表派生，避免两处维护
 AGENT_CHOICES = [(key, item['label']) for key, item in AGENT_REGISTRY.items()]
 
-# 支持工具调用的智能体（走 agent_runner 多轮循环）
-TOOL_AGENTS = ('ops_assistant',)
+# 每个智能体可用的工具（空列表 = 纯聊天）
+AGENT_TOOLS = {key: tuple(item.get('tools') or ()) for key, item in AGENT_REGISTRY.items()}
+
+
+def agent_tools(agent_type):
+    """返回该智能体可用的工具名；空元组表示纯聊天。"""
+    return AGENT_TOOLS.get(agent_type, ())
+
+
+def has_tools(agent_type):
+    return bool(AGENT_TOOLS.get(agent_type))
+
+
+# 兼容旧引用：所有挂了工具的智能体
+TOOL_AGENTS = tuple(key for key, names in AGENT_TOOLS.items() if names)

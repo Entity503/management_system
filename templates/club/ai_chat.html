@@ -309,6 +309,12 @@
     <a class="drafts-link" href="{% url 'club:ai-drafts' %}">
         <span>📋 草稿箱</span><b>{{ pending_draft_count }}</b>
     </a>
+    <a class="drafts-link" href="{% url 'club:ai-artifacts' %}">
+        <span>📚 学习资产</span><b>{{ artifacts_count }}</b>
+    </a>
+    <a class="drafts-link" href="{% url 'club:ai-interviews' %}">
+        <span>🎤 面试记录</span><b>›</b>
+    </a>
     <form method="post" action="{% url 'club:ai-new' %}" class="new-chat-form" id="new-chat-form">
         {% csrf_token %}
         <select name="agent_type" id="agent-select">
@@ -368,6 +374,9 @@
                 <div class="msg-feedback" data-id="{{ msg.pk }}">
                     <button type="button" class="fb-btn{% if msg.feedback == 'up' %} active{% endif %}" data-value="up" title="有用">👍</button>
                     <button type="button" class="fb-btn{% if msg.feedback == 'down' %} active{% endif %}" data-value="down" title="没用">👎</button>
+                    {% if can_save_artifact %}
+                    <button type="button" class="save-artifact" data-id="{{ msg.pk }}" title="保存为我的产出">保存</button>
+                    {% endif %}
                 </div>
                 {% endif %}
             </div>
@@ -386,6 +395,12 @@
             <div class="chat-input-row">
                 <small>Ctrl+Enter 发送</small>
                 <div class="chat-input-actions">
+                    {% if interview_session and interview_session.status == 'active' %}
+                    <form method="post" action="{% url 'club:ai-interview-finish' interview_session.pk %}" style="margin:0;" onsubmit="return confirm('结束面试并生成报告？');">
+                        {% csrf_token %}
+                        <button type="submit" class="regen-btn">结束面试</button>
+                    </form>
+                    {% endif %}
                     <button type="button" id="regen-btn" class="regen-btn" title="用上一条提问重新生成">↻ 重新生成</button>
                     <button type="submit" id="send-btn">发送</button>
                 </div>
@@ -419,6 +434,7 @@
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.11/dist/purify.min.js"></script>
 <script>
 marked.setOptions({ breaks: true, gfm: true });
+var CAN_SAVE_ARTIFACT = {{ can_save_artifact|yesno:"true,false" }};
 
 /* 所有模型输出都要先消毒：防止提示词注入把 <script> 带进页面 */
 function sanitizeHtml(html) {
@@ -578,6 +594,42 @@ function bindFeedback(box) {
 }
 document.querySelectorAll('.msg-feedback').forEach(bindFeedback);
 
+/* 保存为个人产出（学习计划 / 评审记录） */
+function bindSave(btn) {
+    btn.addEventListener('click', async function () {
+        if (btn.disabled) return;
+        btn.disabled = true;
+        var original = btn.textContent;
+        btn.textContent = '保存中…';
+        var fd = new FormData();
+        fd.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+        try {
+            var resp = await fetch("{% url 'club:ai-message-save' 0 %}".replace('/0/', '/' + btn.dataset.id + '/'), {
+                method: 'POST',
+                body: fd,
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            var data = await resp.json();
+            if (!data.ok) throw new Error(data.error || '保存失败');
+            btn.textContent = '已保存';
+            btn.classList.add('is-saved');
+            if (data.url) {
+                var link = document.createElement('a');
+                link.className = 'save-link';
+                link.href = data.url;
+                link.textContent = '查看';
+                btn.insertAdjacentElement('afterend', link);
+            }
+        } catch (err) {
+            btn.disabled = false;
+            btn.textContent = original;
+            alert(err.message || '保存失败');
+        }
+    });
+}
+document.querySelectorAll('.save-artifact').forEach(bindSave);
+
 function addFeedbackBox(aiDiv, messageId) {
     var body = aiDiv.querySelector('.msg-body');
     if (!body || !messageId) return;
@@ -593,6 +645,15 @@ function addFeedbackBox(aiDiv, messageId) {
         box.appendChild(button);
     });
     bindFeedback(box);
+    if (CAN_SAVE_ARTIFACT) {
+        var saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.className = 'save-artifact';
+        saveBtn.dataset.id = messageId;
+        saveBtn.textContent = '保存';
+        bindSave(saveBtn);
+        box.appendChild(saveBtn);
+    }
     body.appendChild(box);
 }
 

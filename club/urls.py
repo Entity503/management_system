@@ -78,6 +78,21 @@ urlpatterns = [
     path('ai/explain/<str:kind>/<int:pk>/', views.ai_explain, name='ai-explain'),
 
     # ------------------------------------------------------------------
+    # AI 产出物（学习计划 / 评审记录）
+    # ------------------------------------------------------------------
+    path('ai/artifacts/', views.ai_artifacts, name='ai-artifacts'),
+    path('ai/artifacts/<int:pk>/', views.ai_artifact_detail, name='ai-artifact-detail'),
+    path('ai/messages/<int:pk>/save/', views.ai_message_save, name='ai-message-save'),
+
+    # ------------------------------------------------------------------
+    # 模拟面试
+    # ------------------------------------------------------------------
+    path('ai/interviews/', views.ai_interviews, name='ai-interviews'),
+    path('ai/interviews/start/', views.ai_interview_start, name='ai-interview-start'),
+    path('ai/interviews/<int:pk>/', views.ai_interview_detail, name='ai-interview-detail'),
+    path('ai/interviews/<int:pk>/finish/', views.ai_interview_finish, name='ai-interview-finish'),
+
+    # ------------------------------------------------------------------
     # AI 草稿箱（所有发布都必须由当前登录用户自己确认）
     # ------------------------------------------------------------------
     path('ai/drafts/', views.ai_drafts, name='ai-drafts'),

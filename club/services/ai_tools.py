@@ -16,13 +16,18 @@ from django.contrib.auth.models import User
 from django.db.models import Q
 from django.utils import timezone
 
-from ..models import Activity, Announcement, Problem, Resource, ResourceCategory
+from ..models import (
+    Activity, Announcement, Problem, Resource, ResourceCategory, Submission,
+)
 from .ai_actions import DraftError, can_publish, create_draft, permission_message
 
 TOOL_LABELS = {
     'search_activities': '查询活动',
     'search_problems': '搜索题目',
     'search_resources': '搜索资料',
+    'search_announcements': '查询公告',
+    'get_problem': '读取题目',
+    'list_my_wrong': '查询错题',
     'platform_stats': '平台统计',
     'draft_problem': '起草题目',
     'draft_announcement': '起草公告',
@@ -168,6 +173,50 @@ TOOL_SCHEMAS = [
             },
         },
     },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'search_announcements',
+            'description': '搜索已发布公告（标题/正文关键词），回答“最近有什么通知”时使用。',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'keyword': {'type': 'string', 'description': '关键词，可省略'},
+                    'limit': {'type': 'integer', 'description': '最多返回条数，默认 5，最大 10'},
+                },
+                'required': [],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'get_problem',
+            'description': '按编号读取一道已发布题目的完整信息（题干、选项、答案、解析），用于讲解具体题目。',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'problem_id': {'type': 'integer', 'description': '题目的 ID'},
+                },
+                'required': ['problem_id'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'list_my_wrong',
+            'description': '查询当前用户最近的错题（只含选择题/判断题/填空题），可按模块过滤。',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'category': {'type': 'string', 'description': '模块中文名，可省略'},
+                    'limit': {'type': 'integer', 'description': '最多返回条数，默认 10，最大 20'},
+                },
+                'required': [],
+            },
+        },
+    },
 ]
 
 TOOL_NAMES = {schema['function']['name'] for schema in TOOL_SCHEMAS}
@@ -210,7 +259,7 @@ def _parse_arguments(raw):
 # ---------------------------------------------------------------------------
 # 只读工具
 # ---------------------------------------------------------------------------
-def _search_activities(args):
+def _search_activities(args, user):
     now = timezone.now()
     queryset = Activity.objects.exclude(status='draft')
     time_range = str(args.get('time_range') or 'upcoming')
@@ -251,7 +300,7 @@ def _search_activities(args):
     return _ok(f'查到 {len(items)} 场活动（共 {total} 场）', total=total, items=items)
 
 
-def _search_problems(args):
+def _search_problems(args, user):
     queryset = Problem.objects.filter(is_published=True).select_related('category')
     keyword = str(args.get('keyword') or '').strip()
     category = str(args.get('category') or '').strip()
@@ -284,7 +333,7 @@ def _search_problems(args):
     return _ok(f'查到 {len(items)} 道题', items=items, total=queryset.count())
 
 
-def _search_resources(args):
+def _search_resources(args, user):
     queryset = Resource.objects.select_related('category')
     keyword = str(args.get('keyword') or '').strip()
     limit = _clamp(args.get('limit'), 5, 1, 10)
@@ -304,7 +353,7 @@ def _search_resources(args):
     return _ok(f'查到 {len(items)} 份资料', items=items, total=queryset.count())
 
 
-def _platform_stats(_args):
+def _platform_stats(args, user):
     now = timezone.now()
     data = {
         'members': User.objects.filter(is_active=True).count(),
@@ -322,6 +371,88 @@ def _platform_stats(_args):
 # ---------------------------------------------------------------------------
 # 建稿工具
 # ---------------------------------------------------------------------------
+def _search_announcements(args, user):
+    queryset = Announcement.objects.filter(is_published=True)
+    keyword = str(args.get('keyword') or '').strip()
+    limit = _clamp(args.get('limit'), 5, 1, 10)
+    if keyword:
+        queryset = queryset.filter(Q(title__icontains=keyword) | Q(content__icontains=keyword))
+
+    items = [
+        {
+            'id': announcement.pk,
+            'title': announcement.title,
+            'category': announcement.get_category_display(),
+            'published_at': _fmt(announcement.published_at or announcement.created_at),
+            'pinned': announcement.is_pinned,
+        }
+        for announcement in queryset[:limit]
+    ]
+    return _ok(f'查到 {len(items)} 条公告', items=items, total=queryset.count())
+
+
+def _get_problem(args, user):
+    problem_id = _clamp(args.get('problem_id'), 0, 0, 1000000000)
+    if not problem_id:
+        return _fail('缺少题目编号（problem_id）')
+
+    problem = Problem.objects.filter(
+        pk=problem_id, is_published=True,
+    ).select_related('category').first()
+    if problem is None:
+        return _fail('题目不存在或尚未发布')
+
+    options = [
+        {'label': option.label, 'content': option.content}
+        for option in problem.options.all()
+    ]
+    return _ok(
+        f'已读取题目《{problem.title}》',
+        id=problem.pk,
+        title=problem.title,
+        type=problem.get_problem_type_display(),
+        difficulty=problem.get_difficulty_display(),
+        category=problem.category.name if problem.category else '',
+        content=problem.content,
+        options=options,
+        answer=problem.answer,
+        explanation=problem.explanation,
+    )
+
+
+def _list_my_wrong(args, user):
+    limit = _clamp(args.get('limit'), 10, 1, 20)
+    category = str(args.get('category') or '').strip()
+
+    queryset = Submission.objects.filter(
+        user=user,
+        is_correct=False,
+        problem__problem_type__in=['single', 'multiple', 'judge', 'fill'],
+    ).select_related('problem', 'problem__category')
+    if category:
+        queryset = queryset.filter(problem__category__name__icontains=category)
+
+    items = []
+    seen = set()
+    for submission in queryset.order_by('-created_at')[:60]:
+        problem = submission.problem
+        if problem.pk in seen:
+            continue
+        seen.add(problem.pk)
+        items.append({
+            'id': problem.pk,
+            'title': problem.title,
+            'type': problem.get_problem_type_display(),
+            'difficulty': problem.get_difficulty_display(),
+            'category': problem.category.name if problem.category else '',
+            'submitted_at': _fmt(submission.created_at),
+        })
+        if len(items) >= limit:
+            break
+
+    return _ok(f'查到 {len(items)} 道错题', items=items, total=len(items))
+
+
 def _draft(kind, args, user):
     if not can_publish(user, kind):
         return _fail(permission_message(kind))
@@ -357,6 +488,9 @@ READ_TOOLS = {
     'search_activities': _search_activities,
     'search_problems': _search_problems,
     'search_resources': _search_resources,
+    'search_announcements': _search_announcements,
+    'get_problem': _get_problem,
+    'list_my_wrong': _list_my_wrong,
     'platform_stats': _platform_stats,
 }
 
@@ -392,7 +526,7 @@ def execute_tool(name, raw_arguments, user):
     args = _parse_arguments(raw_arguments)
     try:
         if name in READ_TOOLS:
-            result = READ_TOOLS[name](args)
+            result = READ_TOOLS[name](args, user)
         else:
             result = DRAFT_TOOLS[name](args, user)
     except Exception as exc:  # noqa: BLE001  工具失败不能中断整轮对话

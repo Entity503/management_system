@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{{ artifact.title }} - AI 产出{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'highlight/github-dark.min.css' %}">
+{% endblock %}
+{% block content %}
+<section class="content-page">
+    <a href="{% url 'club:ai-artifacts' %}" style="color:var(--coral);font-size:14px;">← 返回我的 AI 产出</a>
+
+    <p class="eyebrow" style="margin-top:16px;">{{ artifact.get_kind_display }}</p>
+    <h1>{{ artifact.title }}</h1>
+    <p class="meta">{{ artifact.agent_label }} · {{ artifact.created_at|date:'Y-m-d H:i' }}</p>
+
+    <div class="prose">{{ content_html|safe }}</div>
+
+    <div style="margin-top:32px;">
+        <a class="button" style="background:transparent;color:var(--ink);border:1px solid var(--ink);" href="{% url 'club:ai-artifacts' %}">返回列表</a>
+    </div>
+</section>
+{% endblock %}
+{% block extra_js %}
+<script src="{% static 'highlight/highlight.min.js' %}"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.11/dist/purify.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (window.DOMPurify) {
+        document.querySelectorAll('.prose').forEach(function (block) {
+            block.innerHTML = window.DOMPurify.sanitize(block.innerHTML);
+        });
+    }
+    document.querySelectorAll('pre code').forEach(function (block) { hljs.highlightElement(block); });
+});
+</script>
+{% endblock %}

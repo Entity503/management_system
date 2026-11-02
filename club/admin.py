@@ -17,7 +17,10 @@ from .models import (
     AIMessage,
     Activity,
     ActivitySignup,
+    AgentArtifact,
     Announcement,
+    InterviewSession,
+    InterviewTurn,
     Problem,
     Resource,
     ResourceCategory,
@@ -118,8 +121,8 @@ class AIDraftAdmin(admin.ModelAdmin):
     草稿的确认/丢弃只允许草稿本人在站内操作（服务层会校验 user_id），
     这里不提供「一键发布」，避免绕过用户本人的确认。
     """
-    list_display = ('id', 'kind', 'status', 'user', 'created_at', 'applied_pk')
-    list_filter = ('kind', 'status')
+    list_display = ('id', 'kind', 'status', 'source', 'user', 'created_at', 'applied_pk')
+    list_filter = ('kind', 'status', 'source')
     search_fields = ('user__username', 'user__email')
     readonly_fields = ('payload', 'error', 'applied_pk', 'applied_at')
 
@@ -137,3 +140,27 @@ class AIActionLogAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
+
+@admin.register(AgentArtifact)
+class AgentArtifactAdmin(admin.ModelAdmin):
+    """AI 产出物：学习计划 / 代码评审记录，只读巡检。"""
+    list_display = ('id', 'kind', 'title', 'user', 'agent_type', 'created_at')
+    list_filter = ('kind', 'agent_type')
+    search_fields = ('title', 'content', 'user__username')
+    readonly_fields = ('message',)
+
+
+@admin.register(InterviewSession)
+class InterviewSessionAdmin(admin.ModelAdmin):
+    """模拟面试记录：查看评分与状态。"""
+    list_display = ('id', 'topic', 'user', 'difficulty', 'status', 'score', 'created_at')
+    list_filter = ('status', 'difficulty')
+    search_fields = ('topic', 'user__username')
+
+
+@admin.register(InterviewTurn)
+class InterviewTurnAdmin(admin.ModelAdmin):
+    """面试逐题记录。"""
+    list_display = ('session', 'index', 'score', 'created_at')
+    search_fields = ('question', 'answer')

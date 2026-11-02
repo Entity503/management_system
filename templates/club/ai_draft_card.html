@@ -1,6 +1,7 @@
 <article class="draft-card" data-draft-id="{{ draft.pk }}">
     <header class="draft-card-head">
         <span class="draft-kind">{{ draft.get_kind_display }}</span>
+        {% if draft.source == 'proactive' %}<span class="draft-source" title="由主动巡检 Agent 生成">主动</span>{% endif %}
         <span class="draft-status">待确认</span>
     </header>
     <h3 class="draft-title">{{ draft.display_title }}</h3>

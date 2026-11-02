@@ -444,3 +444,46 @@ python manage.py migrate     # 新增 0013（加一列）
 2. **草稿编辑不处理文件字段**：活动封面、资料文件不参与草稿编辑。
 3. **反馈只落库、暂未消费**：后续可做统计或自动挑选低分回答做 prompt 优化。
 4. 重新生成会**消耗一次请求额度**（因为确实又调了一次模型）。
+
+---
+
+## 十四、多角色 Agent 升级（五个原有智能体）
+
+### 做了什么
+
+| 角色 | 升级内容 | 实现 |
+|------|----------|------|
+| 社团助手 | 查活动 / 公告 / 题目 / 资料 / 统计 | 只读工具白名单 |
+| 学习教练 | 查资料 / 题库；保存学习计划 | 工具 + `AgentArtifact` |
+| 题目答疑 | 搜题 / 取题 / 错题本 / 出题草稿 | `get_problem`、`list_my_wrong`、`draft_problem` |
+| 代码评审 | 保持流式；保存评审记录 | `AgentArtifact` |
+| 面试模拟 | 有状态面试 + 逐题评分 + 报告页 | `InterviewSession` / `InterviewTurn` |
+
+### 基础改造
+
+- `club/agents.py`：每个智能体新增 `tools` 白名单，提供 `agent_tools()` / `has_tools()`
+- `club/services/agent_runner.py`：按白名单过滤 `TOOL_SCHEMAS`，不再把全部工具暴露给每个角色
+- `club/services/ai_tools.py`：新增 `get_problem`、`list_my_wrong`、`search_announcements`
+
+### 数据模型
+
+- `AgentArtifact`：学习计划 / 代码评审记录（保存时按来源消息去重）
+- `InterviewSession` / `InterviewTurn`：面试总分、综合评价、逐题得分与点评
+- 迁移 `0016_agent_artifacts_and_interviews`
+
+### 交互
+
+- 侧边栏新增「学习资产」「面试记录」
+- 学习教练 / 代码评审回复下方「保存」按钮
+- 面试会话输入框旁「结束面试」按钮；结束后跳转报告页
+
+### 取舍
+
+- 挂了工具的智能体（社团助手 / 题目答疑 / 学习教练）走多轮工具循环，**不再逐字流式**
+- 代码评审 / 面试模拟仍为流式
+- 面试报告由一次额外模型调用生成，缺少 API Key 时会提示失败并保留会话
+
+### 验证
+
+- `python manage.py test club.tests` → **101 passed**
+- 迁移 0016 已应用；`/ai/artifacts/`、`/ai/interviews/` 在真实 MySQL 下渲染正常

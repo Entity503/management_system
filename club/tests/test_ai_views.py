@@ -246,7 +246,7 @@ class StreamTests(TestCase):
         cache.clear()
         self.user = User.objects.create_user('stream@example.com', 'stream@example.com', 'pass12345')
 
-    def _new_conversation(self, agent='club_assistant'):
+    def _new_conversation(self, agent='code_review'):
         response = self.client.post(reverse('club:ai-new'), {'agent_type': agent})
         match = re.search(r'/ai/(\d+)/', response.url)
         return int(match.group(1))

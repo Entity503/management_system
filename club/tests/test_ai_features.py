@@ -176,7 +176,7 @@ class ConversationOpsTests(BaseAITestCase):
     def setUp(self):
         super().setUp()
         self.client.force_login(self.staff)
-        self.conversation = AIConversation.objects.create(user=self.staff, agent_type='club_assistant')
+        self.conversation = AIConversation.objects.create(user=self.staff, agent_type='code_review')
 
     def test_rename(self):
         response = self.client.post(

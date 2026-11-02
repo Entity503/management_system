@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block title %}我的 AI 产出 - 计算机俱乐部{% endblock %}
+{% block content %}
+<section class="content-page resource-page">
+    <div class="resource-heading">
+        <div>
+            <p class="eyebrow">AI ARTIFACTS</p>
+            <h1>我的 AI 产出</h1>
+            <p class="meta">在对话里点「保存」沉淀下来的学习计划与代码评审记录。</p>
+        </div>
+        <a class="button" href="{% url 'club:ai-chat' %}">去 AI 助手 <span>→</span></a>
+    </div>
+
+    <div class="resource-list">
+        {% for item in artifacts %}
+        <article class="resource-item">
+            <div class="resource-type">{{ item.get_kind_display }}</div>
+            <div>
+                <h2><a href="{% url 'club:ai-artifact-detail' item.pk %}">{{ item.title }}</a></h2>
+                <p>{{ item.preview }}</p>
+                <small>{{ item.agent_label }} · {{ item.created_at|date:'Y-m-d H:i' }}</small>
+            </div>
+            <div class="resource-action">
+                <a href="{% url 'club:ai-artifact-detail' item.pk %}">查看</a>
+            </div>
+        </article>
+        {% empty %}
+        <p class="empty">还没有保存任何产出。去 AI 助手生成一份学习计划、或做一次代码评审，然后点消息下方的「保存」。</p>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

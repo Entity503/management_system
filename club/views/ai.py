@@ -17,6 +17,8 @@ import json
 import logging
 from urllib.parse import urlencode
 
+import markdown as md
+
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -34,11 +36,22 @@ from ..agents import (
     AGENT_DESCRIPTIONS,
     AGENT_REGISTRY,
     DEFAULT_AGENT,
-    TOOL_AGENTS,
+    agent_tools,
+    has_tools,
 )
 from ..forms import ActivityForm, ProblemForm
 from ..forms.ai import AnnouncementDraftForm
-from ..models import AIConversation, AIDraft, AIMessage, AIQuota, Problem, Resource
+from ..models import (
+    AIConversation,
+    AIDraft,
+    AIMessage,
+    AIQuota,
+    AgentArtifact,
+    InterviewSession,
+    InterviewTurn,
+    Problem,
+    Resource,
+)
 from ..services import agent_runner
 from ..services.ai_actions import (
     VALIDATORS,
@@ -283,6 +296,15 @@ def ai_chat(request, conversation_id=None):
         ],
         'pending_drafts': pending_drafts,
         'pending_draft_count': AIDraft.objects.filter(user=request.user, status='pending').count(),
+        'artifacts_count': AgentArtifact.objects.filter(user=request.user).count(),
+        'interview_session': (
+            InterviewSession.objects.filter(
+                user=request.user, conversation=conversation,
+            ).first() if conversation else None
+        ),
+        'can_save_artifact': bool(
+            conversation and conversation.agent_type in ('study_coach', 'code_review')
+        ),
         'prefill': request.GET.get('q', ''),
     }
     return render(request, 'club/ai_chat.html', context)
@@ -340,9 +362,10 @@ def _execute_exchange(request, conversation, quota, message_text):
     trace = []
     try:
         context = _conversation_context(request.user, conversation)
-        if conversation.agent_type in TOOL_AGENTS:
+        if has_tools(conversation.agent_type):
             result = agent_runner.run_with_tools(
                 conversation.agent_type, history, message_text, context, request.user,
+                tool_names=agent_tools(conversation.agent_type),
             )
             content = result['content']
             trace = result['tool_trace']
@@ -363,7 +386,7 @@ def _execute_exchange(request, conversation, quota, message_text):
             status=200,
         )
 
-    if draft is None and conversation.agent_type in TOOL_AGENTS:
+    if draft is None and conversation.agent_type == 'ops_assistant':
         content, draft = _json_fallback(request.user, conversation, content)
 
     assistant_msg = AIMessage.objects.create(
@@ -484,7 +507,7 @@ def ai_api_stream(request):
     _touch_conversation(conversation, message_text)
     context = _conversation_context(request.user, conversation)
     agent_type = conversation.agent_type
-    is_tool_agent = agent_type in TOOL_AGENTS
+    is_tool_agent = has_tools(agent_type)
     user = request.user
 
     def generator():
@@ -497,7 +520,10 @@ def ai_api_stream(request):
             yield _sse({'type': 'start'})
 
             if is_tool_agent:
-                result = agent_runner.run_with_tools(agent_type, history, message_text, context, user)
+                result = agent_runner.run_with_tools(
+                    agent_type, history, message_text, context, user,
+                    tool_names=agent_tools(agent_type),
+                )
                 trace = result['tool_trace']
                 draft = result['draft']
                 model_name = result['model']
@@ -507,7 +533,7 @@ def ai_api_stream(request):
                     yield _sse({'type': 'tool', **step})
 
                 text = result['content']
-                if draft is None:
+                if draft is None and agent_type == 'ops_assistant':
                     text, draft = _json_fallback(user, conversation, text)
                 if text:
                     parts.append(text)
@@ -824,3 +850,250 @@ def ai_message_feedback(request, pk):
     message.feedback = '' if message.feedback == value else value
     message.save(update_fields=['feedback', 'updated_at'])
     return JsonResponse({'ok': True, 'feedback': message.feedback})
+
+
+# ---------------------------------------------------------------------------
+# AI 产出物（学习计划 / 代码评审记录）
+# ---------------------------------------------------------------------------
+ARTIFACT_KINDS = {
+    'study_coach': 'study_plan',
+    'code_review': 'code_review',
+}
+
+
+def _artifact_title(message):
+    for line in (message.content or '').splitlines():
+        text = line.strip().lstrip('#').strip()
+        if text:
+            return text[:80]
+    return message.conversation.title or 'AI 记录'
+
+
+@login_required
+def ai_artifacts(request):
+    artifacts = AgentArtifact.objects.filter(user=request.user)
+    return render(request, 'club/ai_artifacts.html', {
+        'artifacts': artifacts,
+        'count': artifacts.count(),
+    })
+
+
+@login_required
+def ai_artifact_detail(request, pk):
+    artifact = get_object_or_404(AgentArtifact, pk=pk, user=request.user)
+    return render(request, 'club/ai_artifact_detail.html', {
+        'artifact': artifact,
+        'content_html': md.markdown(artifact.content or '', extensions=['extra', 'fenced_code', 'tables']),
+    })
+
+
+@login_required
+@require_POST
+def ai_message_save(request, pk):
+    """把一条助手回复保存为个人产出物（学习计划 / 评审记录）。"""
+    message = get_object_or_404(AIMessage, pk=pk, conversation__user=request.user)
+    if message.role != 'assistant':
+        return JsonResponse({'ok': False, 'error': '只能保存助手回复。'}, status=400)
+
+    kind = ARTIFACT_KINDS.get(message.conversation.agent_type)
+    if not kind:
+        return JsonResponse({'ok': False, 'error': '该智能体不支持保存产出物。'}, status=400)
+
+    existing = AgentArtifact.objects.filter(user=request.user, message=message).first()
+    if existing:
+        return JsonResponse({
+            'ok': True,
+            'duplicated': True,
+            'id': existing.pk,
+            'title': existing.title,
+            'url': reverse('club:ai-artifact-detail', kwargs={'pk': existing.pk}),
+        })
+
+    artifact = AgentArtifact.objects.create(
+        user=request.user,
+        agent_type=message.conversation.agent_type,
+        kind=kind,
+        title=_artifact_title(message),
+        content=message.content,
+        message=message,
+    )
+    return JsonResponse({
+        'ok': True,
+        'id': artifact.pk,
+        'title': artifact.title,
+        'url': reverse('club:ai-artifact-detail', kwargs={'pk': artifact.pk}),
+    })
+
+
+# ---------------------------------------------------------------------------
+# 模拟面试
+# ---------------------------------------------------------------------------
+def _interview_transcript(conversation):
+    messages_qs = conversation.messages.filter(
+        role__in=['user', 'assistant']
+    ).order_by('created_at')[:40]
+    lines = []
+    for message in messages_qs:
+        content = (message.content or '').strip()
+        if not content:
+            continue
+        role = '面试官' if message.role == 'assistant' else '候选人'
+        lines.append(f'{role}：{content[:1200]}')
+    return '\n\n'.join(lines)
+
+
+def _normalize_report(data):
+    if not isinstance(data, dict):
+        return None
+    try:
+        score = int(data.get('score'))
+    except (TypeError, ValueError):
+        return None
+    score = max(0, min(100, score))
+
+    summary = str(data.get('summary') or '').strip()
+    turns = []
+    for item in (data.get('turns') or [])[:20]:
+        if not isinstance(item, dict):
+            continue
+        question = str(item.get('question') or '').strip()
+        if not question:
+            continue
+        try:
+            turn_score = max(0, min(10, int(item.get('score'))))
+        except (TypeError, ValueError):
+            turn_score = None
+        turns.append({
+            'question': question[:1000],
+            'answer': str(item.get('answer') or '').strip()[:2000],
+            'score': turn_score,
+            'feedback': str(item.get('feedback') or '').strip()[:1000],
+        })
+
+    if not summary and not turns:
+        return None
+    return {'score': score, 'summary': summary, 'turns': turns}
+
+
+def _summarize_interview(session, transcript):
+    prompt = (
+        f'下面是一场模拟面试的对话记录。方向：{session.topic}；'
+        f'难度：{session.get_difficulty_display()}。\n'
+        '请以面试官身份输出 JSON：\n'
+        '{"score": 0-100 的整数, "summary": "综合评价（Markdown）", '
+        '"turns": [{"question": "...", "answer": "...", "score": 0-10, "feedback": "..."}]}\n'
+        '要求：turns 按对话顺序、最多 10 条；只输出 JSON，不要输出其他文字。\n\n'
+        f'{transcript}'
+    )
+    messages = [
+        {'role': 'system', 'content': '你是严格但公正的技术面试官。只输出合法 JSON。'},
+        {'role': 'user', 'content': prompt},
+    ]
+    result = ai_service.chat_messages(messages, temperature=0.3)
+    return _normalize_report(extract_json(result.get('content', '')))
+
+
+@login_required
+def ai_interviews(request):
+    sessions = InterviewSession.objects.filter(user=request.user)
+    return render(request, 'club/ai_interviews.html', {'sessions': sessions})
+
+
+@login_required
+@require_POST
+def ai_interview_start(request):
+    """新建一场模拟面试，同时建一个 interview 会话。"""
+    topic = request.POST.get('topic', '').strip()[:100] or '综合'
+    difficulty = request.POST.get('difficulty', 'medium')
+    if difficulty not in dict(InterviewSession.DIFFICULTY_CHOICES):
+        difficulty = 'medium'
+
+    ok, reason, quota = _enforce_ai_quota(request.user)
+    if not ok:
+        messages.error(request, reason)
+        return redirect('club:ai-chat')
+
+    label = dict(InterviewSession.DIFFICULTY_CHOICES)[difficulty]
+    conversation = AIConversation.objects.create(
+        user=request.user,
+        agent_type='interview',
+        title=f'面试：{topic}',
+        context_label=f'模拟面试：{topic}（{label}）',
+        context_note=(
+            f'【模拟面试】方向：{topic}；难度：{label}。\n'
+            '一次只问一个问题，等候选人回答后给出简短点评再继续；'
+            '面试结束时提醒用户点击「结束并生成报告」。'
+        ),
+    )
+    InterviewSession.objects.create(
+        user=request.user, conversation=conversation,
+        topic=topic, difficulty=difficulty,
+    )
+    if quota:
+        quota.total_conversations += 1
+        quota.save(update_fields=['total_conversations'])
+
+    url = reverse('club:ai-chat-id', kwargs={'conversation_id': conversation.pk})
+    return redirect(f'{url}?{urlencode({"q": "请开始面试，先让我做个自我介绍。"})}')
+
+
+@login_required
+@require_POST
+def ai_interview_finish(request, pk):
+    """结束面试：让模型总结对话，落评分与逐题点评。"""
+    session = get_object_or_404(InterviewSession, pk=pk, user=request.user)
+    if session.is_finished:
+        return redirect('club:ai-interview-detail', pk=session.pk)
+
+    conversation = session.conversation
+    if conversation is None:
+        messages.error(request, '这个面试没有关联的会话。')
+        return redirect('club:ai-interviews')
+
+    transcript = _interview_transcript(conversation)
+    if not transcript.strip():
+        messages.error(request, '还没有面试内容，先聊几轮再生成报告。')
+        return redirect('club:ai-chat-id', conversation_id=conversation.pk)
+
+    try:
+        report = _summarize_interview(session, transcript)
+    except Exception:
+        logger.exception('面试报告生成失败 session=%s', session.pk)
+        messages.error(request, '面试总结生成失败，请稍后重试。')
+        return redirect('club:ai-chat-id', conversation_id=conversation.pk)
+
+    if report is None:
+        messages.error(request, '面试总结格式异常，请稍后重试。')
+        return redirect('club:ai-chat-id', conversation_id=conversation.pk)
+
+    with transaction.atomic():
+        InterviewTurn.objects.filter(session=session).delete()
+        for index, turn in enumerate(report['turns'], start=1):
+            InterviewTurn.objects.create(
+                session=session,
+                index=index,
+                question=turn['question'],
+                answer=turn['answer'],
+                score=turn['score'],
+                feedback=turn['feedback'],
+            )
+        session.score = report['score']
+        session.summary = report['summary']
+        session.status = 'finished'
+        session.save(update_fields=['score', 'summary', 'status', 'updated_at'])
+
+    messages.success(request, '面试报告已生成。')
+    return redirect('club:ai-interview-detail', pk=session.pk)
+
+
+@login_required
+def ai_interview_detail(request, pk):
+    session = get_object_or_404(
+        InterviewSession.objects.select_related('conversation'),
+        pk=pk, user=request.user,
+    )
+    return render(request, 'club/ai_interview_detail.html', {
+        'session': session,
+        'turns': session.turns.all(),
+        'summary_html': md.markdown(session.summary or '', extensions=['extra', 'fenced_code', 'tables']),
+    })

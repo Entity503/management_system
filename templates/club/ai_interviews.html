@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}模拟面试 - 计算机俱乐部{% endblock %}
+{% block content %}
+<section class="content-page">
+    <p class="eyebrow">SIMULATED INTERVIEW</p>
+    <h1>模拟面试</h1>
+    <p class="meta">选一个方向开始，对话结束后点「结束并生成报告」获得总分与逐题点评。</p>
+
+    <form method="post" action="{% url 'club:ai-interview-start' %}" class="auth-form" style="max-width:520px;">
+        {% csrf_token %}
+        <label>
+            面试方向
+            <input type="text" name="topic" maxlength="100" placeholder="如：后端开发 / 数据结构 / 项目深挖" value="后端开发">
+        </label>
+        <label>
+            难度
+            <select name="difficulty">
+                <option value="easy">简单</option>
+                <option value="medium" selected>中等</option>
+                <option value="hard">困难</option>
+            </select>
+        </label>
+        <button class="button" type="submit">开始面试 <span>→</span></button>
+    </form>
+
+    <h2 style="margin-top:36px;">历史记录</h2>
+    <div class="resource-list">
+        {% for s in sessions %}
+        <article class="resource-item">
+            <div class="resource-type">{{ s.get_difficulty_display }}</div>
+            <div>
+                <h2>
+                    <a href="{% url 'club:ai-interview-detail' s.pk %}">
+                        {% if s.status == 'finished' %}{{ s.score }} 分 · {% endif %}{{ s.topic }}
+                    </a>
+                </h2>
+                <p>{{ s.get_status_display }}{% if s.summary %} · {{ s.summary|striptags|truncatechars:60 }}{% endif %}</p>
+                <small>{{ s.created_at|date:'Y-m-d H:i' }}</small>
+            </div>
+            <div class="resource-action">
+                <a href="{% url 'club:ai-interview-detail' s.pk %}">查看报告</a>
+            </div>
+        </article>
+        {% empty %}
+        <p class="empty">还没有面试记录，从上面开始一场吧。</p>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

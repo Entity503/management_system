@@ -11,8 +11,10 @@ from .activities import Activity, ActivitySignup
 from .ai import AIConversation, AIMessage, AIQuota
 from .ai_actions import AIActionLog, AIDraft
 from .announcements import Announcement
+from .artifacts import AgentArtifact
 from .base import TimeStampedModel
 from .comments import Comment
+from .interviews import InterviewSession, InterviewTurn
 from .problems import Problem, ProblemOption, Submission, Tag, _default_category
 from .resources import Resource, ResourceCategory
 from .user import UserProfile
@@ -25,8 +27,11 @@ __all__ = [
     'AIQuota',
     'Activity',
     'ActivitySignup',
+    'AgentArtifact',
     'Announcement',
     'Comment',
+    'InterviewSession',
+    'InterviewTurn',
     'Problem',
     'ProblemOption',
     'Resource',

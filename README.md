@@ -15,6 +15,7 @@
 - 📢 **公告发布**：置顶、分类、Markdown 渲染、管理员 CRUD
 - 🤖 **多智能体 AI 助手**：6 种角色 + 多会话 + 上下文记忆 + 配额管理，DeepSeek / 阿里云百炼双通道自动回退
 - 🧾 **AI 建稿工作台**：运营助手把一句话需求转成题目 / 公告 / 活动草稿，**必须由本人点「确认发布」才落库**，全程可审计
+- ⏰ **主动巡检 Agent**：定时扫描即将开始 / 报名即将截止的活动，自动生成提醒公告草稿（7 天去重、失败回退模板），无需人工触发
 - 💬 **通用评论系统**：基于 Django ContentType 的 GenericForeignKey，支持活动 / 公告 / 题目 / 资料四种实体
 - 🛠️ **管理员后台**：成员管理（Staff 开关与用户删除）、AI 配额调整、Django Admin 全模型操作
 
@@ -31,6 +32,7 @@
 | **刷题** | 题目列表筛选、答题判分、用户出题、错题记录、Markdown 解析 |
 | **AI** | 多会话、6 种角色、Token 统计、每日配额、双通道 Provider 回退 |
 | **AI 建稿** | 运营助手生成题目 / 公告 / 活动草稿 → 本人确认后发布 → 审计日志 |
+| **主动巡检** | 定时扫描 24 小时内的活动 / 报名截止，自动生成提醒草稿（去重 + 审计） |
 | **星空馆** | 真实星表渲染、拖拽 / 缩放、流星雨、星座信息卡、待机自转、纯净模式 |
 | **活动** | 创建 / 编辑 / 删除、报名 / 取消 / 候补、签到、状态管理 |
 | **公告** | 发布 / 编辑 / 删除、置顶、分类筛选 |
@@ -42,17 +44,20 @@
 
 ### 6 种 AI 智能体
 
-| 角色 | agent_type | 典型场景 |
-|------|-----------|----------|
-| 社团助手 | `club_assistant` | 新手指引、功能介绍、按真实数据回答"最近有什么活动" |
-| 学习教练 | `study_coach` | 按年级 / 专业定制学习路径 |
-| 题目答疑 | `problem_tutor` | 解题思路、复杂度分析、代码示例 |
-| 代码评审 | `code_review` | Bug / 性能 / 可读性 / 风格多维点评 |
-| 面试模拟 | `interview` | 算法 / 八股 / 项目 / 系统设计面试 + 评分 |
-| 运营助手 | `ops_assistant` | 一句话生成题目 / 公告 / 活动草稿，确认后发布 |
+| 角色 | agent_type | 能用工具做什么 | 典型场景 |
+|------|-----------|----------------|----------|
+| 社团助手 | `club_assistant` | 查活动 / 公告 / 题目 / 资料 / 统计 | 新手指引、按真实数据回答"最近有什么活动" |
+| 学习教练 | `study_coach` | 查资料库、题库；保存学习计划 | 按年级 / 专业定制学习路径 |
+| 题目答疑 | `problem_tutor` | 搜题 / 取题 / 查我的错题 / 出题入库 | 解题思路、复杂度分析、错题复盘 |
+| 代码评审 | `code_review` | 流式评审；保存评审记录 | Bug / 性能 / 可读性 / 风格多维点评 |
+| 面试模拟 | `interview` | 有状态面试 + 逐题评分 + 报告页 | 算法 / 八股 / 项目 / 系统设计面试 |
+| 运营助手 | `ops_assistant` | 8 个工具：查询 + 建稿 | 一句话生成题目 / 公告 / 活动草稿，确认后发布 |
 
-> 智能体的中文名、说明、示例、System Prompt 统一维护在 `club/agents.py`，
-> 新增智能体只需改这一个文件 + 生成迁移。
+> 智能体的中文名、说明、示例、System Prompt、**工具白名单**统一维护在 `club/agents.py`，
+> 新增智能体只需改这一个文件 + 生成迁移；`agent_runner` 会按白名单过滤工具。
+>
+> 挂工具的智能体（社团助手 / 题目答疑 / 学习教练）走多轮工具循环，输出为一次性；
+> 代码评审 / 面试模拟保持逐字流式。
 
 ### 7 种题型
 
@@ -82,7 +87,9 @@ management_system/
 │   │   ├── announcements.py #   Announcement
 │   │   ├── comments.py      #   Comment（GenericForeignKey）
 │   │   ├── ai.py            #   AIConversation / AIMessage / AIQuota
-│   │   └── ai_actions.py    #   AIDraft / AIActionLog（草稿 + 审计）
+│   │   ├── ai_actions.py    #   AIDraft / AIActionLog（草稿 + 审计）
+│   │   ├── artifacts.py     #   AgentArtifact（学习计划 / 评审记录）
+│   │   └── interviews.py    #   InterviewSession / InterviewTurn
 │   ├── forms/               # Django Form 子包
 │   │   ├── __init__.py
 │   │   ├── auth.py          #   RegisterForm / LoginForm / ProfileForm
@@ -94,8 +101,11 @@ management_system/
 │   │   ├── ai_actions.py    #   草稿解析 / 校验 / 权限 / 落库 / 审计
 │   │   ├── ai_tools.py      #   function calling 工具（查询 + 建稿）
 │   │   ├── agent_runner.py  #   多轮工具调用循环（最多 3 轮）
+│   │   ├── proactive.py     #   主动巡检 Agent（规则 + 去重 + 生成草稿）
 │   │   └── platform_context.py # 平台快照，注入 System Prompt
-│   ├── tests/               # 测试（草稿 / 工具 / 流式 / 体验 / 服务，74 个用例）
+│   ├── management/commands/
+│   │   └── proactive_agent.py   # 定时命令：python manage.py proactive_agent
+│   ├── tests/               # 测试（草稿 / 工具 / 流式 / 体验 / 服务 / 主动巡检，101 个用例）
 │   ├── views/               # 视图子包（按业务域拆分）
 │   │   ├── __init__.py      #   统一 re-export（外部 import 完全兼容原 views.py）
 │   │   ├── auth.py          #   注册 / 登录 / 退出 / 个人资料
@@ -103,7 +113,7 @@ management_system/
 │   │   ├── resources.py     #   学习资料（列表 / 详情 / 上传 / 下载 / 删除）
 │   │   ├── activities.py    #   活动（列表 / 详情 / CRUD / 状态切换 / STAFF_REQUIRED）
 │   │   ├── problems.py      #   刷题（列表 / 详情 + 判分 / 出题 / CRUD）
-│   │   ├── ai.py            #   AI 对话 + 配额系统 + SUPER_ADMIN_EMAIL + 辅助函数
+│   │   ├── ai.py            #   AI 对话 / 工具型智能体 / 草稿 / 产出物 / 面试
 │   │   ├── admin.py         #   管理员后台（成员 / AI 配额）
 │   │   ├── announcements.py  #   公告（列表 / 详情 / CRUD）
 │   │   └── comments.py      #   通用评论（_inject_comments 被 4 个详情页共用）
@@ -123,6 +133,9 @@ management_system/
 │       ├── problem_create.html       # 用户出题
 │       ├── ai_chat.html              # AI 对话界面（含草稿卡片）
 │       ├── ai_drafts.html            # AI 草稿箱
+│       ├── ai_artifacts.html         # 我的 AI 产出（学习计划 / 评审）
+│       ├── ai_interviews.html        # 模拟面试列表 + 新建
+│       ├── ai_interview_detail.html  # 面试报告（总分 / 逐题点评）
 │       ├── activity_list.html        # 活动列表
 │       ├── activity_detail.html      # 活动详情 + 报名 + 评论
 │       ├── announcement_list.html    # 公告列表
@@ -140,6 +153,7 @@ management_system/
 │   └── data/                # 原始星表与星座简介（不参与部署）
 ├── docs/                    # 设计与运维文档
 │   ├── AI_AGENT_UPGRADE_PLAN.md
+│   ├── PROACTIVE_AGENT.md
 │   └── SKY_BACKGROUND.md
 ├── media/                   # 用户上传文件（avatars / resources）
 ├── .env.example             # 环境变量示例
@@ -274,6 +288,8 @@ python manage.py runserver
 | AI 助手（新建会话） | `/ai/` | 登录 |
 | AI 助手（继续会话） | `/ai/<conversation_id>/` | 登录 |
 | AI 草稿箱 | `/ai/drafts/` | 登录（只能看/确认自己的草稿） |
+| 我的 AI 产出 | `/ai/artifacts/` | 登录（学习计划 / 评审记录） |
+| 模拟面试 | `/ai/interviews/` | 登录（新建 / 历史报告） |
 | 活动列表 | `/activities/` | 登录 |
 | 活动详情 | `/activities/<id>/` | 登录 |
 | 公告列表 | `/announcements/` | 公开 |
@@ -440,6 +456,26 @@ AI 接口仅允许登录用户访问，并限制单条消息长度和请求频�
 | **按智能体调温度** | 代码评审 0.2、面试 0.4、题目答疑 0.5、运营 0.3、教练/助手 0.7 |
 | **输出消毒** | 前端 DOMPurify 过滤模型输出，防止提示词注入带出 `<script>` |
 
+### 学习资产与面试报告
+
+- **学习计划 / 评审记录**：在 `study_coach` / `code_review` 的回复下点「保存」，写入 `AgentArtifact`，在 `/ai/artifacts/` 回看
+- **模拟面试**：`/ai/interviews/` 新建（方向 + 难度）→ 对话结束后点「结束并生成报告」→ 模型总结对话，落 `InterviewSession.score` 与逐题 `InterviewTurn`，报告页展示总分、逐题点评
+
+### 主动巡检 Agent（定时任务）
+
+不等人开口：定时扫描一次，把「需要提醒的事」变成待确认草稿。
+
+| 规则 | 触发条件 | 产出 |
+|------|----------|------|
+| `activity-start` | 活动 24 小时内开始 | 「提醒：XX 即将开始」 |
+| `activity-deadline` | 报名 24 小时内截止 | 「报名即将截止：XX」 |
+
+- **去重**：`AIDraft.source_key` 保证同一活动 7 天内只提醒一次
+- **归属**：优先活动组织者（管理员），否则回退超级管理员
+- **文案**：模板兜底；配置了 API Key 时用 LLM 润色，模型失败自动回退模板
+- **审计**：每次生成写 `AIActionLog(action='agent.proactive')`
+- **命令**：`python manage.py proactive_agent --no-llm`，详见 [docs/PROACTIVE_AGENT.md](docs/PROACTIVE_AGENT.md)
+
 ---
 
 ## 📝 开发约定
@@ -482,6 +518,9 @@ python manage.py collectstatic --noinput
 
 # 重新生成星空数据（修改 scripts/data/ 后）
 python scripts/build_sky_data.py
+
+# 主动巡检：生成活动提醒草稿（--dry-run 只看计划）
+python manage.py proactive_agent --no-llm
 ```
 
 ---
@@ -512,6 +551,9 @@ resend>=2.0,<3.0
 - ✅ 多智能体 AI 助手（6 种角色 / 双通道 Provider）
 - ✅ AI 配额管理
 - ✅ AI 建稿工作台（运营助手 + 草稿确认 + 审计）
+- ✅ 主动巡检 Agent（活动提醒 / 去重 / 定时任务）
+- ✅ 多角色 Agent 工具化（社团助手 / 题目答疑 / 学习教练）
+- ✅ 学习资产（学习计划 / 评审记录）与模拟面试报告
 - ✅ 平台快照注入（AI 知道社团当前有什么）
 - ✅ AI 体验增强（讲解这题 / 草稿编辑 / 重新生成 / 反馈 / 流式）
 - ✅ 通用评论系统

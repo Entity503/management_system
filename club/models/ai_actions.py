@@ -32,6 +32,10 @@ class AIDraft(TimeStampedModel):
         ('discarded', '已丢弃'),
         ('failed', '校验失败'),
     ]
+    SOURCE_CHOICES = [
+        ('manual', '人工触发'),
+        ('proactive', '主动巡检'),
+    ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='ai_drafts')
     conversation = models.ForeignKey(
@@ -41,6 +45,11 @@ class AIDraft(TimeStampedModel):
     kind = models.CharField('草稿类型', max_length=20, choices=KIND_CHOICES)
     payload = models.JSONField('草稿内容', default=dict)
     status = models.CharField('状态', max_length=20, choices=STATUS_CHOICES, default='pending')
+    source = models.CharField('来源', max_length=20, choices=SOURCE_CHOICES, default='manual')
+    source_key = models.CharField(
+        '去重键', max_length=200, blank=True, db_index=True,
+        help_text='主动巡检用，如 activity-start:12，防止重复提醒',
+    )
     applied_pk = models.PositiveIntegerField('落库对象 ID', null=True, blank=True)
     error = models.TextField('校验错误', blank=True)
     applied_at = models.DateTimeField('确认时间', null=True, blank=True)

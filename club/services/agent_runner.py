@@ -17,23 +17,33 @@ MAX_TOOL_ROUNDS = 3
 FALLBACK_TEXT = '我暂时没法完成这个请求，可以再具体描述一下吗？'
 
 
-def run_with_tools(agent_type, history, user_message, context, user):
+def run_with_tools(agent_type, history, user_message, context, user, tool_names=None):
     """
     执行一次带工具的对话。
 
-    返回 {'content', 'model', 'tokens', 'tool_trace', 'draft'}：
-    - tool_trace：给前端渲染的气泡列表 [{'name','label','ok','summary'}]
-    - draft：本轮生成的最后一个草稿对象（没有则 None）
+    tool_names：该智能体可用的工具白名单；None 表示不限制。
+    返回 {'content', 'model', 'tokens', 'tool_trace', 'draft'}。
     """
     messages = ai_service.build_messages(agent_type, history, user_message, context=context)
     temperature = agent_temperature(agent_type)
+
+    schemas = None
+    if tool_names is not None:
+        allowed = set(tool_names)
+        schemas = [
+            schema for schema in TOOL_SCHEMAS
+            if schema['function']['name'] in allowed
+        ]
+        if not schemas:
+            schemas = None
+
     trace = []
     draft = None
     model_name = ''
     tokens = 0
 
     for round_index in range(MAX_TOOL_ROUNDS):
-        result = ai_service.chat_messages(messages, tools=TOOL_SCHEMAS, temperature=temperature)
+        result = ai_service.chat_messages(messages, tools=schemas, temperature=temperature)
         model_name = result.get('model') or model_name
         tokens += int(result.get('tokens') or 0)
 

@@ -409,12 +409,14 @@ def _check_daily_limit(user):
 # ---------------------------------------------------------------------------
 # 对外接口
 # ---------------------------------------------------------------------------
-def create_draft(user, kind, payload, conversation=None):
+def create_draft(user, kind, payload, conversation=None, source='manual', source_key=''):
     """
     创建一条草稿。
 
     校验失败也会落一条 status=failed 的记录（便于审计和排查），
     但不会创建任何业务对象。
+
+    source/source_key 供主动巡检 Agent 使用：来源标记 + 去重键。
     """
     if kind not in VALIDATORS:
         raise DraftError('不支持的草稿类型，只支持题目 / 公告 / 活动。')
@@ -427,6 +429,7 @@ def create_draft(user, kind, payload, conversation=None):
         draft = AIDraft.objects.create(
             user=user, conversation=conversation, kind=kind,
             payload=raw_payload, status='failed', error=str(exc),
+            source=source, source_key=source_key,
         )
         _log(user, 'draft.create', kind, None, False, {'error': str(exc), 'payload': raw_payload})
         return draft
@@ -434,6 +437,7 @@ def create_draft(user, kind, payload, conversation=None):
     draft = AIDraft.objects.create(
         user=user, conversation=conversation, kind=kind,
         payload=cleaned, status='pending',
+        source=source, source_key=source_key,
     )
     _log(user, 'draft.create', kind, None, True, {'payload': cleaned})
     return draft

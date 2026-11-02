@@ -449,6 +449,14 @@ textarea:focus { border-color: var(--glow) !important; background: rgba(107, 140
     border: 1px solid rgba(255, 122, 200, 0.35);
 }
 .draft-status { margin-left: auto; font-size: .72rem; color: var(--muted); }
+.draft-source {
+    font-size: .66rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(126, 232, 200, 0.14);
+    color: var(--mint);
+    border: 1px solid rgba(126, 232, 200, 0.35);
+}
 .draft-title { font-family: Georgia, serif; font-size: 1rem; margin: 0 0 10px; color: var(--ink); }
 .draft-fields {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -531,6 +539,54 @@ textarea:focus { border-color: var(--glow) !important; background: rgba(107, 140
 }
 .chat-input-row .regen-btn:hover { color: var(--coral); border-color: var(--coral); }
 .chat-input-row .regen-btn:disabled { opacity: .5; cursor: wait; }
+
+/* 保存为个人产出 */
+.save-artifact {
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--muted);
+    cursor: pointer;
+    font: inherit;
+    font-size: .72rem;
+    padding: 1px 8px;
+}
+.save-artifact:hover { color: var(--coral); border-color: var(--coral); }
+.save-artifact.is-saved { color: var(--mint); border-color: rgba(126, 232, 200, 0.5); }
+.save-link { font-size: .72rem; color: var(--coral); align-self: center; }
+
+/* 面试报告 */
+.interview-score { display: flex; align-items: baseline; gap: 8px; margin: 18px 0 22px; }
+.interview-score strong {
+    font-family: Georgia, serif;
+    font-size: 4rem;
+    font-weight: 400;
+    background: linear-gradient(135deg, #6b8cff, #ff7ac8);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+.interview-score span { color: var(--muted); font-size: .9rem; }
+.interview-turns { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; }
+.interview-turn {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--panel);
+    padding: 14px 18px;
+}
+.interview-turn header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.interview-turn .turn-score { color: var(--coral); font-size: .8rem; }
+.interview-turn .turn-q { margin: 0 0 8px; color: var(--ink); font-size: .88rem; line-height: 1.7; }
+.interview-turn .turn-a { margin: 0 0 8px; color: var(--muted); font-size: .82rem; line-height: 1.7; white-space: pre-wrap; }
+.interview-turn .turn-a span { display: inline-block; font-size: .68rem; color: var(--coral); margin-right: 6px; }
+.interview-turn .turn-f {
+    margin: 0;
+    color: var(--muted);
+    font-size: .8rem;
+    line-height: 1.7;
+    border-top: 1px dashed var(--line);
+    padding-top: 8px;
+}
 
 /* ==========================================================================
    星空馆 HUD（拖拽 / 缩放 / 流星雨）

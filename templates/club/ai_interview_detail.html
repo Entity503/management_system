@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block title %}面试报告 - {{ session.topic }}{% endblock %}
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.11/dist/purify.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (window.DOMPurify) {
+        document.querySelectorAll('.prose').forEach(function (block) {
+            block.innerHTML = window.DOMPurify.sanitize(block.innerHTML);
+        });
+    }
+});
+</script>
+{% endblock %}
+{% block content %}
+<section class="content-page">
+    <a href="{% url 'club:ai-interviews' %}" style="color:var(--coral);font-size:14px;">← 返回面试记录</a>
+
+    <p class="eyebrow" style="margin-top:16px;">INTERVIEW REPORT</p>
+    <h1>{{ session.topic }}</h1>
+    <p class="meta">
+        难度：{{ session.get_difficulty_display }} · {{ session.created_at|date:'Y-m-d H:i' }} · {{ session.get_status_display }}
+    </p>
+
+    {% if session.status == 'finished' %}
+        <div class="interview-score">
+            <strong>{{ session.score }}</strong><span>/ 100</span>
+        </div>
+
+        {% if summary_html %}
+        <div class="prose">{{ summary_html|safe }}</div>
+        {% endif %}
+
+        {% if turns %}
+        <h2 style="margin-top:36px;">逐题点评</h2>
+        <div class="interview-turns">
+            {% for t in turns %}
+            <article class="interview-turn">
+                <header>
+                    <b>第 {{ t.index }} 题</b>
+                    {% if t.score is not None %}<span class="turn-score">{{ t.score }}/10</span>{% endif %}
+                </header>
+                <p class="turn-q">{{ t.question }}</p>
+                {% if t.answer %}<p class="turn-a"><span>回答</span>{{ t.answer }}</p>{% endif %}
+                {% if t.feedback %}<p class="turn-f">{{ t.feedback }}</p>{% endif %}
+            </article>
+            {% endfor %}
+        </div>
+        {% endif %}
+    {% else %}
+        <p class="empty">这场面试还在进行中，聊几轮之后再生成报告。</p>
+        <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">
+            {% if session.conversation_id %}
+            <a class="button" href="{% url 'club:ai-chat-id' session.conversation_id %}">继续面试</a>
+            {% endif %}
+            <form method="post" action="{% url 'club:ai-interview-finish' session.pk %}" style="margin:0;">
+                {% csrf_token %}
+                <button class="button" type="submit">结束并生成报告</button>
+            </form>
+        </div>
+    {% endif %}
+</section>
+{% endblock %}
